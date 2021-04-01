@@ -31,13 +31,37 @@ class Environment(object):
             self._dataframe = pd.read_csv(filename, header=0, index_col="Date",
                                  names=["Date", "Open", "High", "Low", "Close", "Volume"])
         except:
+            self._dataframe = None
             raise AssertionError(stock_name + " is not a stock or ETF.")
         self._start_date = start_date
         self._end_date = end_date
+        self.state = None
+    
+
+    def step(self, action):
+        """
+        Takes action in the current state to get to the next state
+
+        Returns an array [new_state, reward, done] where:
+            - new_state (State object): state after taking action in the current state
+            - reward (float): reward for taking action in the current state 
+            - done (boolean): whether or not the run is done 
+        """
+        # state includes (stock_price, num_shares, buying_power)
+        # reward = num_shares * change_in_price
+        raise NotImplementedError()
+
+    def reset(self):
+        """
+        Resets the environment to a random date in the first 33% of the range 
+        with a random amount of positions and random amount of buying power
+        """
+        raise NotImplementedError()
     
     def _check_date_preconditions(self, start_date, end_date):
         """
-
+        Returns: True if start_date and end_date are in the right format.
+                False otherwise
         """
         try:
             start_arr = re.split(r'[\-]', start_date)
