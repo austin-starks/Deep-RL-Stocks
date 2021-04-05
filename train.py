@@ -66,7 +66,7 @@ class StockEnv(gym.Env):
             starting_shares = [0 for _ in range(self.number_of_stocks)]
        
         self.state = np.array(
-            [starting_money] + self.get_stock_prices() + starting_shares
+            [starting_money] + starting_shares + self.get_stock_prices() 
         )
         
         # self.observation_space = spaces.Box(
@@ -76,11 +76,14 @@ class StockEnv(gym.Env):
         # )
      
         self.action_space = spaces.Box(
-            low=-MAX_LIMIT, high=MAX_LIMIT, shape=(self.number_of_stocks,), dtype=np.int
+            low=-MAX_LIMIT, 
+            high=MAX_LIMIT, 
+            shape=(self.number_of_stocks,), 
+            dtype=np.int
         )
 
-    def calculate_reward(self, state, stock_prices_old, stock_prices_new):
-        r = 0
+    def calculate_reward(self, holdings, stock_prices_old, stock_prices_new):
+        r = np.sum((np.array(stock_prices_new) - np.array(stock_prices_old)) * holdings)
         return r
 
     def step(self, action):
@@ -96,16 +99,41 @@ class StockEnv(gym.Env):
         stock_prices_old = self.get_stock_prices()
         # perform action: if buying, add positions. if selling, subtract positions. 
         # change buying power
+        holdings, remaining_money = self.get_new_holdings(action, stock_prices_old)
         self.increment_date()
         stock_prices_new = self.get_stock_prices()
 
-        remaining_money = 0
-        holdings = [0] * self.number_of_stocks
-        new_state = [remaining_money] + stock_prices_new + holdings # state after adding positions
+        new_state = np.concatenate((np.array([remaining_money]), 
+                                    holdings, 
+                                    np.array(stock_prices_new)))  # state after adding positions
 
-        reward = self.calculate_reward(new_state, stock_prices_old, stock_prices_new)
-        self.state = np.array(new_state)
+        reward = self.calculate_reward(holdings, stock_prices_old, stock_prices_new)
+        self.state = new_state
         return self.state, reward, self.is_done()
+
+    def get_new_holdings(self, action, stock_prices):
+        """
+        Gets the new holdingd after taking action
+        """
+        old_holdings = self.state[1:1+self.number_of_stocks]
+        current_cash = self.state[0]
+        result = []
+        for a, holding, price in zip(action, old_holdings, stock_prices):
+            if a > 0:
+                spending = current_cash*.33*a / 100
+                if current_cash > 0:
+                    num_shares = spending / price
+                    current_cash -= spending
+                else: 
+                    num_shares = 0
+                result.append(holding + num_shares)
+            else:
+                num_shares = abs(holding * a / 100)
+                gaining = num_shares * price 
+                current_cash += gaining
+                result.append(holding - num_shares)
+        return np.array(result), current_cash
+        
 
     def increment_date(self):
         """
@@ -140,8 +168,8 @@ class StockEnv(gym.Env):
         self.initialize_starting_epoch(self.start_date, self.end_date)
         self.state = np.array(
             [starting_money]
-            + self.get_stock_prices()
             + starting_shares
+            + self.get_stock_prices()
         )
         return self.state
 
@@ -164,7 +192,13 @@ class StockEnv(gym.Env):
         start_arr = list(map(lambda x: int(x), re.split(r'[\-]', self.start_date)))
         date_obj = datetime.date(start_arr[0], start_arr[1], start_arr[2]) + datetime.timedelta(self.epochs // 2)
         return str(date_obj), time
-        
+    
+
+    def calculate_portfolio_value(self):
+        """
+        Calculates the current portfolio value
+        """
+        return self.state[0] + np.sum(self.state[1:1+self.number_of_stocks] * self.state[1+self.number_of_stocks:1 + 2*self.number_of_stocks])
 
     def initialize_date(self, start_date, end_date):
         """
@@ -221,7 +255,7 @@ def run(stock_names="SPY"):
     with tqdm(total=NUMBER_OF_ITERATIONS) as pbar:
         for t in range(NUMBER_OF_ITERATIONS):
             utils.log_info(env.get_date_and_time())
-
+            utils.log_info("portfolio value: ", env.calculate_portfolio_value())
             episode_timesteps += 1
 
             # Select action randomly or according to policy
