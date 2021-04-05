@@ -1,4 +1,5 @@
 .DS_Store
 /env
 .vscode
-__pycache__
+/__pycache__
+*.pyc

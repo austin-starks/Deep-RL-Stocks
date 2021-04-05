@@ -104,7 +104,7 @@ class StockEnv(gym.Env):
         new_state = [remaining_money] + stock_prices_new + holdings # state after adding positions
 
         reward = self.calculate_reward(new_state, stock_prices_old, stock_prices_new)
-        self.state = new_state
+        self.state = np.array(new_state)
         return self.state, reward, self.is_done()
 
     def increment_date(self):
@@ -132,15 +132,16 @@ class StockEnv(gym.Env):
         """
         if self.random_start:
             starting_money = random.randint(self.starting_amount_lower, self.starting_amount_upper)
-            starting_shares = random.randint(0, 10)
+            starting_shares = [random.randint(0, 10) for _ in range(self.number_of_stocks)]
         else:
             starting_money = self.starting_amount_upper
-            starting_shares = 0
+            starting_shares = [0 for _ in range(self.number_of_stocks)]
+       
         self.initialize_starting_epoch(self.start_date, self.end_date)
         self.state = np.array(
             [starting_money]
             + self.get_stock_prices()
-            + [starting_shares]
+            + starting_shares
         )
         return self.state
 
