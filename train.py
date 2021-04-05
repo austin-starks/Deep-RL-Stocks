@@ -10,7 +10,7 @@ import datetime
 import utils
 
 NUMBER_OF_ITERATIONS = 50000
-MAX_LIMIT = 10
+MAX_LIMIT = 100
 START_TIMESTEPS = 2500
 BATCH_SIZE = 128
 STD_GAUSSIAN_EXPLORATION_NOISE = 0.1
@@ -207,8 +207,8 @@ class StockEnv(gym.Env):
         self.increment_date() # needed to be sure we're not on a weekend/holiday
 
 
-def run():
-    env = StockEnv("NVDA")
+def run(stock_names="SPY"):
+    env = StockEnv(stock_names)
     utils.log_info("Environment Initilized")
     policy = TD3(env.state.shape[0], env.action_space.shape[0], max_action=MAX_LIMIT)
     replay_buffer = ReplayBuffer(env.state.shape[0], env.action_space.shape[0])

@@ -16,6 +16,6 @@ if __name__ == "__main__":
         level=logging.INFO,
         filemode="w")
 
-    train.run()
+    train.run(stock_names=["NVDA", "AAPL", "SPY"])
 
     
