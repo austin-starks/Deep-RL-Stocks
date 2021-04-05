@@ -79,7 +79,7 @@ class StockEnv(gym.Env):
             low=-MAX_LIMIT, high=MAX_LIMIT, shape=(self.number_of_stocks,), dtype=np.int
         )
 
-    def calculate_reward(self):
+    def calculate_reward(self, state, stock_prices_old, stock_prices_new):
         r = 0
         return r
 
@@ -92,13 +92,19 @@ class StockEnv(gym.Env):
             - reward (float): reward for taking action in the current state 
             - done (boolean): whether or not the run is done 
         """
-        # perform action
+        
+        stock_prices_old = self.get_stock_prices()
+        # perform action: if buying, add positions. if selling, subtract positions. 
+        # change buying power
         self.increment_date()
-        reward = self.calculate_reward()
+        stock_prices_new = self.get_stock_prices()
+
         remaining_money = 0
         holdings = [0] * self.number_of_stocks
-    
-        self.state = [remaining_money] + self.get_stock_prices() + holdings
+        new_state = [remaining_money] + stock_prices_new + holdings # state after adding positions
+
+        reward = self.calculate_reward(new_state, stock_prices_old, stock_prices_new)
+        self.state = new_state
         return self.state, reward, self.is_done()
 
     def increment_date(self):
