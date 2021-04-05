@@ -270,9 +270,10 @@ def run(stock_names="SPY"):
                         size=env.action_space.shape[0],
                     )
                 ).clip(-MAX_LIMIT, MAX_LIMIT)
-            utils.log_info("action", action)
+            utils.log_info("action: ", action)
             # Perform action
             next_state, reward, done = env.step(action)
+            utils.log_info("reward: ", reward)
             done_bool = float(done) if episode_timesteps < env.max_epochs else 0
 
             # Store data in replay buffer
