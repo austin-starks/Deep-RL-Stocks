@@ -110,6 +110,12 @@ class StockEnv(gym.Env):
         reward = self.calculate_reward(holdings, stock_prices_old, stock_prices_new)
         self.state = new_state
         return self.state, reward, self.is_done()
+        
+    def get_holdings(self):
+        """
+        Returns: the current holdings
+        """
+        return self.state[1:1+self.number_of_stocks]
 
     def get_new_holdings(self, action, stock_prices):
         """
@@ -128,9 +134,14 @@ class StockEnv(gym.Env):
                     num_shares = 0
                 result.append(holding + num_shares)
             else:
-                num_shares = abs(holding * a / 100)
-                gaining = num_shares * price 
-                current_cash += gaining
+                if holding > 0:
+                    num_shares = abs(holding * a / 100)
+                    gaining = num_shares * price 
+                    current_cash += gaining
+                else:
+                    num_shares = 0
+                if holding - num_shares < 1:
+                    num_shares = holding
                 result.append(holding - num_shares)
         return np.array(result), current_cash
         
@@ -242,8 +253,8 @@ class StockEnv(gym.Env):
         self.increment_date() # needed to be sure we're not on a weekend/holiday
 
 
-def run(stock_names="SPY"):
-    env = StockEnv(stock_names)
+def run(stock_names="SPY", random_start=False):
+    env = StockEnv(stock_names, random_start=random_start)
     utils.log_info("Environment Initilized")
     policy = TD3(env.state.shape[0], env.action_space.shape[0], max_action=MAX_LIMIT)
     replay_buffer = ReplayBuffer(env.state.shape[0], env.action_space.shape[0])
@@ -274,6 +285,7 @@ def run(stock_names="SPY"):
             # Perform action
             next_state, reward, done = env.step(action)
             utils.log_info("reward: ", reward)
+            utils.log_info("holdings: ", env.get_holdings())
             done_bool = float(done) if episode_timesteps < env.max_epochs else 0
 
             # Store data in replay buffer
