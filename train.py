@@ -62,20 +62,8 @@ class StockEnv(gym.Env):
         self.initialize_date(start_date, end_date), "Date preconditions failed"
         self.starting_amount_lower = starting_amount_lower
         self.starting_amount_upper = starting_amount_upper
-        if random_start:
-            starting_money = random.randint(
-                starting_amount_lower, starting_amount_upper
-            )
-            starting_shares = [
-                random.randint(0, 10) for _ in range(self.number_of_stocks)
-            ]
-        else:
-            starting_money = starting_amount_upper
-            starting_shares = [0 for _ in range(self.number_of_stocks)]
-
-        self.state = np.array(
-            [starting_money] + starting_shares + self.get_stock_prices()
-        )
+        self.starting_amount = self.starting_amount_upper
+        self.reset()
 
         self.action_space = spaces.Box(
             low=-MAX_LIMIT, high=MAX_LIMIT, shape=(self.number_of_stocks,), dtype=np.int
@@ -85,7 +73,7 @@ class StockEnv(gym.Env):
         r = (
             remaining_money
             + np.sum(holdings * (stock_prices_new))
-            - self.starting_amount_upper
+            - self.starting_amount
         )
         return r
 
@@ -105,10 +93,10 @@ class StockEnv(gym.Env):
         holdings, remaining_money = self.get_new_holdings(action, stock_prices_old)
         self.increment_date()
         stock_prices_new = self.get_stock_prices()
-
-        new_state = np.concatenate(
-            (np.array([remaining_money]), holdings, np.array(stock_prices_new))
-        )  # state after adding positions
+     
+        new_state = np.concatenate([
+            np.array([remaining_money]), holdings, stock_prices_new
+        ])  
 
         reward = self.calculate_reward(holdings, remaining_money, stock_prices_new)
         self.state = new_state
@@ -162,20 +150,24 @@ class StockEnv(gym.Env):
         with a random amount of positions and random amount of buying power
         """
         if self.random_start:
-            starting_money = random.randint(
+            starting_money = [random.randint(
                 self.starting_amount_lower, self.starting_amount_upper
-            )
+            )]
             starting_shares = [
                 random.randint(0, 10) for _ in range(self.number_of_stocks)
             ]
         else:
-            starting_money = self.starting_amount_upper
+            starting_money = [self.starting_amount_upper]
             starting_shares = [0 for _ in range(self.number_of_stocks)]
-
+        starting_money = np.array(starting_money)
+        starting_shares = np.array(starting_shares)
         self.initialize_starting_epoch(self.start_date, self.end_date)
-        self.state = np.array(
-            [starting_money] + starting_shares + self.get_stock_prices()
-        )
+
+        stock_prices = self.get_stock_prices()        
+        self.state = np.concatenate([
+            starting_money, starting_shares, self.get_stock_prices()
+        ])
+        self.starting_amount = self.calculate_portfolio_value()
         return self.state
 
     def get_stock_prices(self):
@@ -187,7 +179,7 @@ class StockEnv(gym.Env):
         for stock in self.stock_names:
             price = self.dataframes[stock].loc[current_date][current_time]
             result.append(price)
-        return result
+        return np.array(result)
 
     def get_date_and_time(self):
         """
@@ -233,7 +225,6 @@ class StockEnv(gym.Env):
         self.max_epochs = epochs * 2
         self.start_date = start_date
         self.end_date = end_date
-        self.initialize_starting_epoch(start_date, end_date)
 
     def initialize_starting_epoch(self, start_date, end_date):
         """
@@ -262,8 +253,6 @@ def run(stock_names="SPY", random_start=False):
 
     with tqdm(total=NUMBER_OF_ITERATIONS) as pbar:
         for t in range(NUMBER_OF_ITERATIONS):
-            # utils.log_info(env.get_date_and_time())
-            # utils.log_info("portfolio value: ", env.calculate_portfolio_value())
             episode_timesteps += 1
 
             # Select action randomly or according to policy
@@ -282,6 +271,8 @@ def run(stock_names="SPY", random_start=False):
             # Perform action
             next_state, reward, done = env.step(action)
             if pbar.n % 50 == 0:
+                # utils.log_info(f"Date and Time: {env.get_date_and_time()}")
+                # utils.log_info(f"Current Portfolio Value: {env.calculate_portfolio_value()}")
                 pbar.set_description(f"Reward: {reward}")
             done_bool = float(done) if episode_timesteps < env.max_epochs else 0
 
