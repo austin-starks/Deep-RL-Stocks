@@ -3,14 +3,20 @@ import logging
 import datetime
 import utils
 from pathlib import Path
+import train
 
 
 if __name__ == "__main__":
     path = os.path.dirname(Path(__file__).absolute())
-
-    # Can log with utils.log_info(args)
+    # format_long = '%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s'
+    format_short = '[%(filename)s:%(lineno)d] %(message)s'
     logging.basicConfig(
-        filename=f'{path}/logs/{datetime.datetime.now().strftime("%m-%d-%Y %H:%M:%S")}.log',
-        format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+        filename=f'{path}/logs/{"log"}.log',
+        format=format_short,
         datefmt='%Y-%m-%d:%H:%M:%S',
-        level=logging.INFO)
+        level=logging.INFO,
+        filemode="w")
+
+    train.run(stock_names=["NVDA", "AAPL", "SPY"], random_start=True)
+
+    
