@@ -27,8 +27,8 @@ class StockEnv(gym.Env):
     def __init__(
         self,
         stock_names,
-        start_date="2016-04-01",
-        end_date="2020-12-31",
+        start_date,
+        end_date,
         starting_amount_lower=0,
         starting_amount_upper=50000,
         random_start=False,
@@ -241,8 +241,8 @@ class StockEnv(gym.Env):
         self.increment_date()  # needed to be sure we're not on a weekend/holiday
 
 
-def run(stock_names="SPY", random_start=False):
-    env = StockEnv(stock_names, random_start=random_start)
+def run(stock_names="SPY", start_date="2015-02-01", end_date="2019-12-31", random_start=True):
+    env = StockEnv(stock_names, start_date, end_date, random_start=random_start)
     utils.log_info("Environment Initilized")
     policy = TD3(env.state.shape[0], env.action_space.shape[0], max_action=MAX_LIMIT)
     replay_buffer = ReplayBuffer(env.state.shape[0], env.action_space.shape[0])
@@ -267,8 +267,8 @@ def run(stock_names="SPY", random_start=False):
                         size=env.action_space.shape[0],
                     )
                 ).clip(-MAX_LIMIT, MAX_LIMIT)
-                action.astype(int)
-            # utils.log_info("action", action)
+                action = action.astype(int)
+
             # Perform action
             next_state, reward, done = env.step(action)
             if pbar.n % 50 == 0:
@@ -299,13 +299,14 @@ def run(stock_names="SPY", random_start=False):
                 episode_num += 1
 
             pbar.update()
+    policy.save()
 
 def test(stock_names,
         load_location="initial_policy",
-        start_date="2020-12-31",
-        end_date="2021-03-10"
+        start_date="2020-01-01",
+        end_date="2021-01-10"
         ):
-    env = StockEnv(stock_names, random_start=False, start_date=start_date, end_date=end_date)
+    env = StockEnv(stock_names, start_date=start_date, end_date=end_date, random_start=False)
     utils.log_info("Environment Initilized")
     policy = TD3(env.state.shape[0], env.action_space.shape[0], max_action=MAX_LIMIT)
     policy.load(load_location)
