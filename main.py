@@ -18,5 +18,7 @@ if __name__ == "__main__":
         filemode="w")
 
     train.run(stock_names=["NVDA", "AAPL", "SPY"], random_start=True)
+    train.test(stock_names=["NVDA", "AAPL", "SPY"])
+
 
     

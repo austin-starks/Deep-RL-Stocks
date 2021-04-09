@@ -267,6 +267,7 @@ def run(stock_names="SPY", random_start=False):
                         size=env.action_space.shape[0],
                     )
                 ).clip(-MAX_LIMIT, MAX_LIMIT)
+                action.astype(int)
             # utils.log_info("action", action)
             # Perform action
             next_state, reward, done = env.step(action)
@@ -298,3 +299,33 @@ def run(stock_names="SPY", random_start=False):
                 episode_num += 1
 
             pbar.update()
+
+def test(stock_names,
+        load_location="initial_policy",
+        start_date="2020-12-31",
+        end_date="2021-03-10"
+        ):
+    env = StockEnv(stock_names, random_start=False, start_date=start_date, end_date=end_date)
+    utils.log_info("Environment Initilized")
+    policy = TD3(env.state.shape[0], env.action_space.shape[0], max_action=MAX_LIMIT)
+    policy.load(load_location)
+    replay_buffer = ReplayBuffer(env.state.shape[0], env.action_space.shape[0])
+    state, done = env.reset(), False
+    episode_reward = 0
+    t = 0
+    while not done:
+        action = (policy.select_action(np.array(state))
+                        + np.random.normal(
+                            0,
+                            MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE,
+                            size=env.action_space.shape[0],
+                        )
+                    ).clip(-MAX_LIMIT, MAX_LIMIT)
+        next_state, reward, done = env.step(action)
+        state = next_state
+        episode_reward += reward
+        state = next_state
+        episode_reward += reward
+        if t >= START_TIMESTEPS:
+                policy.train(replay_buffer, BATCH_SIZE)
+        t += 1
