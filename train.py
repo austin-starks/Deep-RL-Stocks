@@ -288,9 +288,7 @@ def run(stock_names="SPY",
             if pbar.n % 50 == 0:
                 # utils.log_info(f"Date and Time: {env.get_date_and_time()}")
                 # utils.log_info(f"Current Portfolio Value: {env.calculate_portfolio_value()}")
-                pbar.set_description(f"Reward: {reward}")
-            if pbar.n % 200 == 0:
-                utils.log_info("action", action)
+                pbar.set_description(f"Reward: {reward} | Action: {action}")
 
             done_bool = float(done) if episode_timesteps < env.max_epochs else 0
 
