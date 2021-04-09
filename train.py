@@ -8,6 +8,7 @@ import random
 import re
 import datetime
 import utils
+import os.path
 
 NUMBER_OF_ITERATIONS = 50000
 MAX_LIMIT = 10
@@ -131,18 +132,22 @@ class StockEnv(gym.Env):
         start_arr = list(map(lambda x: int(x), re.split(r"[\-]", self.start_date)))
         date_obj = datetime.date(start_arr[0], start_arr[1], start_arr[2])
         s = self.stock_names[0]
+        adjusted_date = str(date_obj + datetime.timedelta((self.epochs + incr) // 2))
         while not (
-            str(date_obj + datetime.timedelta((self.epochs + incr) // 2))
+            adjusted_date
             in self.dataframes[s].index
         ):
             incr += 1
+            adjusted_date = str(date_obj + datetime.timedelta((self.epochs + incr) // 2))
+            if incr >= 20:
+                raise Exception(f"{adjusted_date} is out of range")
         self.epochs += incr
 
     def is_done(self):
         """
         Returns: True if the episode is done. False otherwise
         """
-        return self.epochs == self.max_epochs
+        return self.epochs >= self.max_epochs 
 
     def reset(self):
         """
@@ -241,10 +246,20 @@ class StockEnv(gym.Env):
         self.increment_date()  # needed to be sure we're not on a weekend/holiday
 
 
-def run(stock_names="SPY", start_date="2015-02-01", end_date="2019-12-31", random_start=True):
+def run(stock_names="SPY", 
+        start_date="2016-04-01", 
+        end_date="2019-12-31", 
+        random_start=True, 
+        save_location="initial_policy"):
     env = StockEnv(stock_names, start_date, end_date, random_start=random_start)
+    
     utils.log_info("Environment Initilized")
     policy = TD3(env.state.shape[0], env.action_space.shape[0], max_action=MAX_LIMIT)
+    # os.path.exists('initial_policy')
+    if os.path.exists(save_location + "_actor"):
+        print("Loaded policy")
+        policy.load(save_location)
+
     replay_buffer = ReplayBuffer(env.state.shape[0], env.action_space.shape[0])
     state, done = env.reset(), False
     episode_reward = 0
@@ -268,13 +283,15 @@ def run(stock_names="SPY", start_date="2015-02-01", end_date="2019-12-31", rando
                     )
                 ).clip(-MAX_LIMIT, MAX_LIMIT)
                 action = action.astype(int)
-
             # Perform action
             next_state, reward, done = env.step(action)
             if pbar.n % 50 == 0:
                 # utils.log_info(f"Date and Time: {env.get_date_and_time()}")
                 # utils.log_info(f"Current Portfolio Value: {env.calculate_portfolio_value()}")
                 pbar.set_description(f"Reward: {reward}")
+            if pbar.n % 200 == 0:
+                utils.log_info("action", action)
+
             done_bool = float(done) if episode_timesteps < env.max_epochs else 0
 
             # Store data in replay buffer
@@ -297,9 +314,10 @@ def run(stock_names="SPY", start_date="2015-02-01", end_date="2019-12-31", rando
                 episode_reward = 0
                 episode_timesteps = 0
                 episode_num += 1
+                policy.save(save_location)
 
             pbar.update()
-    policy.save()
+    
 
 def test(stock_names,
         load_location="initial_policy",
@@ -307,7 +325,7 @@ def test(stock_names,
         end_date="2021-01-10"
         ):
     env = StockEnv(stock_names, start_date=start_date, end_date=end_date, random_start=False)
-    utils.log_info("Environment Initilized")
+    utils.log_info("Testing policy")
     policy = TD3(env.state.shape[0], env.action_space.shape[0], max_action=MAX_LIMIT)
     policy.load(load_location)
     replay_buffer = ReplayBuffer(env.state.shape[0], env.action_space.shape[0])
@@ -315,6 +333,7 @@ def test(stock_names,
     episode_reward = 0
     t = 0
     while not done:
+        # print(env.get_date_and_time())
         action = (policy.select_action(np.array(state))
                         + np.random.normal(
                             0,
