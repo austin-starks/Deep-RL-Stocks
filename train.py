@@ -30,7 +30,7 @@ class StockEnv(gym.Env):
         stock_names,
         start_date,
         end_date,
-        starting_amount_lower=0,
+        starting_amount_lower=10000,
         starting_amount_upper=50000,
         random_start=False,
     ):
@@ -130,7 +130,7 @@ class StockEnv(gym.Env):
         """
         incr = 1
         start_arr = list(map(lambda x: int(x), re.split(r"[\-]", self.start_date)))
-        date_obj = datetime.date(start_arr[0], start_arr[1], start_arr[2])
+        date_obj = datetime.date(start_arr[2], start_arr[0], start_arr[1])
         s = self.stock_names[0]
         adjusted_date = str(date_obj + datetime.timedelta((self.epochs + incr) // 2))
         while not (
@@ -193,7 +193,7 @@ class StockEnv(gym.Env):
         time = "Open" if self.epochs % 2 == 0 else "Close"
         start_arr = list(map(lambda x: int(x), re.split(r"[\-]", self.start_date)))
         date_obj = datetime.date(
-            start_arr[0], start_arr[1], start_arr[2]
+            start_arr[2], start_arr[0], start_arr[1]
         ) + datetime.timedelta(self.epochs // 2)
         return str(date_obj), time
 
@@ -222,8 +222,8 @@ class StockEnv(gym.Env):
                 return date_is_valid
         date1 = [int(x) for x in re.split(r"[\-]", start_date)]
         date2 = [int(x) for x in re.split(r"[\-]", end_date)]
-        date1_obj = datetime.date(date1[0], date1[1], date1[2])
-        date2_obj = datetime.date(date2[0], date2[1], date2[2])
+        date1_obj = datetime.date(date1[2], date1[0], date1[1])
+        date2_obj = datetime.date(date2[2], date2[0], date2[1])
         epochs = (date2_obj - date1_obj).days
         if not (date_is_valid and epochs >= 0):
             raise ValueError("Date is not valid")
@@ -246,9 +246,9 @@ class StockEnv(gym.Env):
         self.increment_date()  # needed to be sure we're not on a weekend/holiday
 
 
-def run(stock_names="SPY", 
-        start_date="2016-04-01", 
-        end_date="2019-12-31", 
+def run(stock_names, 
+        start_date, 
+        end_date, 
         random_start=True, 
         save_location="initial_policy"):
     env = StockEnv(stock_names, start_date, end_date, random_start=random_start)
@@ -313,23 +313,29 @@ def run(stock_names="SPY",
                 episode_timesteps = 0
                 episode_num += 1
                 policy.save(save_location)
-
             pbar.update()
+    return policy, replay_buffer
     
+def append_portfolio_value(df, env):
+    value = env.calculate_portfolio_value()
+    date, time = env.get_date_and_time()
+    time = '09:30AM' if time == 'Open' else '04:00PM'
+    datetime = date + " " + time
+    return df.append(pd.DataFrame([round(value, 2)], columns=['Portfolio Value'], index=[datetime]))
 
 def test(stock_names,
-        load_location="initial_policy",
-        start_date="2020-01-01",
-        end_date="2021-01-10"
+        start_date,
+        end_date,
+        policy,
+        replay_buffer,
         ):
     env = StockEnv(stock_names, start_date=start_date, end_date=end_date, random_start=False)
     utils.log_info("Testing policy")
-    policy = TD3(env.state.shape[0], env.action_space.shape[0], max_action=MAX_LIMIT)
-    policy.load(load_location)
-    replay_buffer = ReplayBuffer(env.state.shape[0], env.action_space.shape[0])
     state, done = env.reset(), False
     episode_reward = 0
-    t = 0
+    df = pd.DataFrame(columns=['Portfolio Value'])
+    df = append_portfolio_value(df, env)
+    
     while not done:
         # print(env.get_date_and_time())
         action = (policy.select_action(np.array(state))
@@ -342,8 +348,6 @@ def test(stock_names,
         next_state, reward, done = env.step(action)
         state = next_state
         episode_reward += reward
-        state = next_state
-        episode_reward += reward
-        if t >= START_TIMESTEPS:
-                policy.train(replay_buffer, BATCH_SIZE)
-        t += 1
+        policy.train(replay_buffer, BATCH_SIZE)
+        df = append_portfolio_value(df, env)            
+    df.to_csv('test_results.csv')
