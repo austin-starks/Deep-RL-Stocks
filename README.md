@@ -4,13 +4,21 @@ This repository intends to leverage the power of Deep Reinforcement Learning for
 
 ## Instructions
 
-Simply run:
+Simply clone the repository
+
+```python
+git clone https://github.com/austin-starks/Deep-RL-Stocks.git
+```
+
+And run:
 
 ```python
 python main.py
 ```
 
-And the algorithm will proceed to run with the stocks listed in stock_names (in main.py)
+And the algorithm will proceed to run with the stocks listed in stock_names (in main.py).
+
+Currently, this system supports every stock in the S&P 500 and the Nasdaq. If you want to train/test this algorithm with a stock not in these indices, you must download them yourself.
 
 ## Contributing
 
