@@ -238,8 +238,8 @@ class StockEnv(gym.Env):
         if self.random_start:
             date1 = [int(x) for x in re.split(r"[\-]", start_date)]
             date2 = [int(x) for x in re.split(r"[\-]", end_date)]
-            date1_obj = datetime.date(date1[0], date1[1], date1[2])
-            date2_obj = datetime.date(date2[0], date2[1], date2[2])
+            date1_obj = datetime.date(date1[2], date1[0], date1[1])
+            date2_obj = datetime.date(date2[2], date2[0], date2[1])
             self.epochs = random.randint(-1, int((date2_obj - date1_obj).days * 0.2))
         else:
             self.epochs = -1
@@ -288,7 +288,7 @@ def run(stock_names,
             if pbar.n % 50 == 0:
                 # utils.log_info(f"Date and Time: {env.get_date_and_time()}")
                 # utils.log_info(f"Current Portfolio Value: {env.calculate_portfolio_value()}")
-                pbar.set_description(f"Reward: {reward} | Action: {action}")
+                pbar.set_description(f"Date: {env.get_date_and_time()[0]} | Reward: {reward} | Action: {action} | Holdings: {env.get_holdings()}")
 
             done_bool = float(done) if episode_timesteps < env.max_epochs else 0
 
@@ -333,7 +333,7 @@ def test(stock_names,
     utils.log_info("Testing policy")
     state, done = env.reset(), False
     episode_reward = 0
-    df = pd.DataFrame(columns=['Portfolio Value'])
+    df = pd.DataFrame(columns=["Date", 'Portfolio Value'])
     df = append_portfolio_value(df, env)
     
     while not done:
