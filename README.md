@@ -1,6 +1,6 @@
 # Deep Reinfocement Learning for Stocks
 
-This repository intends to leverage the power of Deep Reinforcement Learning for the Stock Market. The algorithm is based on Xiong et al Practical Deep Learning Approach for Stock Trading. However, instead of using the traditional DDPG algorithm, we use Twin-Delayed DDPG. Additionally, we constructured our system to be able to trade multiple stocks at once, instead of the "one stock at a time" approach that they adapted in their paper
+This repository intends to leverage the power of Deep Reinforcement Learning for the Stock Market. The algorithm is based on Xiong et al Practical Deep Learning Approach for Stock Trading. However, instead of using the traditional DDPG algorithm, we use Twin-Delayed DDPG. Additionally, we constructed our system to be able to trade multiple stocks at once, instead of the "one stock at a time" approach that they adapted in their paper
 
 ## Instructions
 
@@ -18,7 +18,7 @@ python main.py
 
 And the algorithm will proceed to run with the stocks listed in stock_names (in main.py).
 
-Currently, this system supports every stock in the S&P 500 and the Nasdaq. If you want to train/test this algorithm with a stock not in these indices, you must download them yourself.
+Currently, this system supports every stock in the S&P 500 and the Nasdaq. If you want to train/test this algorithm with stock(s) that are not in these indices, you can download the data using the "collect_data.ipynb" file and run it on the stock(s) that you desire
 
 ## Contributing
 
