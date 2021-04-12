@@ -58,7 +58,7 @@ class StockEnv(gym.Env):
         self.starting_amount_lower = starting_amount_lower
         self.starting_amount_upper = starting_amount_upper
         self.starting_amount = self.starting_amount_upper
-        self.reset()
+        self.reset(init=True)
 
         self.action_space = spaces.Box(
             low=-MAX_LIMIT, high=MAX_LIMIT, shape=(self.number_of_stocks,), dtype=np.int
@@ -90,9 +90,7 @@ class StockEnv(gym.Env):
         self.increment_date()
         new_date, new_time = self.get_date_and_time()
         stock_prices_new = self.state.get_stock_prices(new_date, new_time)
-     
         self.state.advance_state(remaining_money, holdings, new_date, new_time)
-
         reward = self.calculate_reward(holdings, remaining_money, stock_prices_new)
         return self.state, reward, self.is_done()
         
@@ -122,7 +120,7 @@ class StockEnv(gym.Env):
         """
         return self.epochs >= self.max_epochs 
 
-    def reset(self):
+    def reset(self, init=False):
         """
         Resets the environment to a random date in the first 33% of the range 
         with a random amount of positions and random amount of buying power
@@ -142,7 +140,10 @@ class StockEnv(gym.Env):
         self.initialize_starting_epoch(self.start_date, self.end_date)
         
         current_date, current_time = self.get_date_and_time()
-        self.state.reset(starting_money, starting_shares, current_date, current_time)
+        if init:
+            self.state = State(self.stock_names, starting_money, starting_shares, current_date, current_time)
+        else:
+            self.state.reset(starting_money, starting_shares, current_date, current_time)
         self.starting_amount = self.state.calculate_portfolio_value()
         return self.state
 
