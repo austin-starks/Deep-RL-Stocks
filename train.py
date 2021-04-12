@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from model import TD3, ReplayBuffer
-from State import * 
+from State import State
 import random
 import re
 import datetime
@@ -38,8 +38,8 @@ class StockEnv(gym.Env):
         """
         Initializes the environment.
         
-        Parameter stock_name: the name of the stock for this environment.
-        Precondition: stock_name must be a str of a stock (or etf)'s ticker
+        Parameter stock_names: the name of the stocks for this environment.
+        Precondition: stock_names must be an array of stocks or ETFs
 
         Parameter start_date: the starting date of this environment.
         Precondition: start_date must be a string in this format: YYYY-DD-MM
@@ -91,7 +91,7 @@ class StockEnv(gym.Env):
         new_date, new_time = self.get_date_and_time()
         stock_prices_new = self.state.get_stock_prices(new_date, new_time)
      
-        self.state.advance_state(remaining_money, holdings, stock_prices_new)
+        self.state.advance_state(remaining_money, holdings, new_date, new_time)
 
         reward = self.calculate_reward(holdings, remaining_money, stock_prices_new)
         return self.state, reward, self.is_done()
@@ -142,7 +142,7 @@ class StockEnv(gym.Env):
         self.initialize_starting_epoch(self.start_date, self.end_date)
         
         current_date, current_time = self.get_date_and_time()
-        self.state = State(self.stock_names, starting_money, starting_shares, current_date, current_time)
+        self.state.reset(starting_money, starting_shares, current_date, current_time)
         self.starting_amount = self.state.calculate_portfolio_value()
         return self.state
 
@@ -310,6 +310,7 @@ def test(stock_names,
                         )
                     ).clip(-MAX_LIMIT, MAX_LIMIT)
         next_state, reward, done = env.step(action)
+        done_bool = float(done)
         replay_buffer.add(state.to_numpy(), action, next_state.to_numpy(), reward, done_bool)
         state = next_state
         episode_reward += reward
