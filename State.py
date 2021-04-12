@@ -5,7 +5,7 @@ class PastState(object):
     """
     Represents the past state of State
     """
-    def __init__(self, state_length, max_size=1000):
+    def __init__(self, state_length, max_size=156):
         """
         Initializes the past state
         """
@@ -17,19 +17,20 @@ class PastState(object):
         """
         Resets the state to the initial state
         """
-        self.past_state = np.zeros((self.max_size, self.state_length))
+        self.data = np.zeros((self.max_size, self.state_length))
         self.current_size = 0
+        self.shape = self.data.shape
         
     
-    def add(self, state):
+    def add(self, essential_state):
         """
         Adds the state to the past state queue
         """
         if self.current_size < self.max_size:
-            self.past_state[self.current_size] = state.to_numpy()
+            self.data[self.current_size] = essential_state
             self.current_size += 1
         else:
-            self.past_state = np.vstack((state.to_numpy(), self.past_state[:-1]))
+            self.data = np.vstack((essential_state, self.data[:-1]))
         
 
 
@@ -74,9 +75,15 @@ class State(object):
             starting_money, starting_shares, self.get_stock_prices(current_date, current_time)
         ])
         self.past_state = PastState(len(self.essential_state))
-        self.past_state.add(self)
+        self.past_state.add(self.essential_state)
         self.shape = self.essential_state.shape
     
+    def __len__(self):
+        """
+        Returns: The length of the state
+        """
+        return len(self.past_state)
+
     def get_stock_prices(self, current_date, current_time):
         """
         Gets the current stock price at this epoch
@@ -126,7 +133,7 @@ class State(object):
         Parameter current_date (string): The date of the new state
         Parameter current_time (string): The time of the new state
         """
-        self.past_state.add(self)
+        self.past_state.add(self.essential_state)
         stock_prices = self.get_stock_prices(current_date, current_time)
         self.essential_state = np.concatenate([
             np.array([remaining_money]), holdings, stock_prices
@@ -140,10 +147,10 @@ class State(object):
             starting_money, starting_shares, self.get_stock_prices(current_date, current_time)
         ])
         self.past_state.reset()
-        self.past_state.add(self)
+        self.past_state.add(self.essential_state)
     
     def to_numpy(self):
         """
         Returns the numpy array representing the state object
         """
-        return self.essential_state.copy()
+        return self.essential_state

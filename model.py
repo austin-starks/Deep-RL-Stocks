@@ -95,7 +95,7 @@ class TD3(object):
         self.total_it = 0
 
     def select_action(self, state):
-        state = torch.FloatTensor(state.reshape(1, -1)).to(device)
+        state = torch.FloatTensor(state).to(device)
         return self.actor(state).cpu().data.numpy().flatten()
 
     def train(self, replay_buffer, batch_size=100):
@@ -182,13 +182,15 @@ class ReplayBuffer(object):
         self.max_size = max_size
         self.ptr = 0
         self.size = 0
-
-        self.state = np.zeros((max_size, state_dim))
+        if type(state_dim) == int:
+            full_state_dim = [max_size] + [state_dim]
+        else:
+            full_state_dim = [max_size] + [s for s in state_dim]
         self.action = np.zeros((max_size, action_dim))
-        self.next_state = np.zeros((max_size, state_dim))
+        self.state = np.zeros(full_state_dim)
+        self.next_state = np.zeros(full_state_dim)
         self.reward = np.zeros((max_size, 1))
         self.not_done = np.zeros((max_size, 1))
-
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
