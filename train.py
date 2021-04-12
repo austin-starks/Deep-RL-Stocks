@@ -215,7 +215,7 @@ def run(stock_names,
         start_date, 
         end_date, 
         random_start=True, 
-        save_location="initial_policy"):
+        save_location="results/initial_policy"):
     env = StockEnv(stock_names, start_date, end_date, random_start=random_start)
     
     utils.log_info("Environment Initilized")
