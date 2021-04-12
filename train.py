@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from model import TD3, ReplayBuffer
+from State import * 
 import random
 import re
 import datetime
@@ -49,15 +50,8 @@ class StockEnv(gym.Env):
         """
         super(StockEnv, self).__init__()
         self.random_start = random_start
-        self.dataframes = dict()
-        if type(stock_names) == str:
-            stock_names = [stock_names]
-        for stock_name in stock_names:
-            filename = f"data/price_data/{stock_name}.csv"
-            try:
-                self.dataframes[stock_name] = pd.read_csv(filename, index_col="Date")
-            except:
-                raise AssertionError(stock_name + " is not a stock or ETF.")
+        self.valid_dates = pd.read_csv("data/price_data/SPY.csv", index_col="Date").index
+        
         self.number_of_stocks = len(stock_names)
         self.stock_names = stock_names
         self.initialize_date(start_date, end_date), "Date preconditions failed"
@@ -88,41 +82,20 @@ class StockEnv(gym.Env):
             - done (boolean): whether or not the run is done 
         """
 
-        stock_prices_old = self.get_stock_prices()
+        current_date, current_time = self.get_date_and_time()
+        stock_prices_old = self.state.get_stock_prices(current_date, current_time)
         # perform action: if buying, add positions. if selling, subtract positions.
         # change buying power
-        holdings, remaining_money = self.get_new_holdings(action, stock_prices_old)
+        holdings, remaining_money = self.state.get_new_holdings(action, stock_prices_old)
         self.increment_date()
-        stock_prices_new = self.get_stock_prices()
+        new_date, new_time = self.get_date_and_time()
+        stock_prices_new = self.state.get_stock_prices(new_date, new_time)
      
-        new_state = np.concatenate([
-            np.array([remaining_money]), holdings, stock_prices_new
-        ])  
+        self.state.advance_state(remaining_money, holdings, stock_prices_new)
 
         reward = self.calculate_reward(holdings, remaining_money, stock_prices_new)
-        self.state = new_state
         return self.state, reward, self.is_done()
         
-    def get_holdings(self):
-        """
-        Returns: the current holdings
-        """
-        return self.state[1:1+self.number_of_stocks]
-
-    def get_new_holdings(self, action, stock_prices):
-        """
-        Gets the new holdingd after taking action
-        """
-        old_holdings = self.state[1 : 1 + self.number_of_stocks]
-        current_cash = self.state[0]
-        new_holdings = []
-        for a, holding, price in zip(action, old_holdings, stock_prices):
-            if current_cash - (a * price) >= 0 and holding + a >= 0:
-                new_holdings.append(max(0, holding + a))
-                current_cash -= a * price
-            else:
-                new_holdings.append(holding)
-        return np.array(new_holdings), current_cash
 
     def increment_date(self):
         """
@@ -135,7 +108,7 @@ class StockEnv(gym.Env):
         adjusted_date = str(date_obj + datetime.timedelta((self.epochs + incr) // 2))
         while not (
             adjusted_date
-            in self.dataframes[s].index
+            in self.valid_dates
         ):
             incr += 1
             adjusted_date = str(date_obj + datetime.timedelta((self.epochs + incr) // 2))
@@ -167,25 +140,13 @@ class StockEnv(gym.Env):
         starting_money = np.array(starting_money)
         starting_shares = np.array(starting_shares)
         self.initialize_starting_epoch(self.start_date, self.end_date)
-
-        stock_prices = self.get_stock_prices()        
-        self.state = np.concatenate([
-            starting_money, starting_shares, self.get_stock_prices()
-        ])
-        self.starting_amount = self.calculate_portfolio_value()
+        
+        current_date, current_time = self.get_date_and_time()
+        self.state = State(self.stock_names, starting_money, starting_shares, current_date, current_time)
+        self.starting_amount = self.state.calculate_portfolio_value()
         return self.state
 
-    def get_stock_prices(self):
-        """
-        Gets the current stock price at this epoch
-        """
-        current_date, current_time = self.get_date_and_time()
-        result = []
-        for stock in self.stock_names:
-            price = self.dataframes[stock].loc[current_date][current_time]
-            result.append(price)
-        return np.array(result)
-
+    
     def get_date_and_time(self):
         """
         Gets current date and time
@@ -201,10 +162,13 @@ class StockEnv(gym.Env):
         """
         Calculates the current portfolio value
         """
-        return self.state[0] + np.sum(
-            self.state[1 : 1 + self.number_of_stocks]
-            * self.state[1 + self.number_of_stocks : 1 + 2 * self.number_of_stocks]
-        )
+        return self.state.calculate_portfolio_value()
+    
+    def get_holdings(self):
+        """
+        Returns: the current holdings
+        """
+        return self.state.get_holdings()
 
     def initialize_date(self, start_date, end_date):
         """
@@ -275,7 +239,7 @@ def run(stock_names,
                 action = env.action_space.sample()
             else:
                 action = (
-                    policy.select_action(np.array(state))
+                    policy.select_action(state.to_numpy())
                     + np.random.normal(
                         0,
                         MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE,
@@ -293,7 +257,7 @@ def run(stock_names,
             done_bool = float(done) if episode_timesteps < env.max_epochs else 0
 
             # Store data in replay buffer
-            replay_buffer.add(state, action, next_state, reward, done_bool)
+            replay_buffer.add(state.to_numpy(), action, next_state.to_numpy(), reward, done_bool)
 
             state = next_state
             episode_reward += reward
@@ -312,7 +276,7 @@ def run(stock_names,
                 episode_reward = 0
                 episode_timesteps = 0
                 episode_num += 1
-                policy.save(save_location)
+                # policy.save(save_location)
             pbar.update()
     return policy, replay_buffer
     
@@ -338,7 +302,7 @@ def test(stock_names,
     
     while not done:
         # print(env.get_date_and_time())
-        action = (policy.select_action(np.array(state))
+        action = (policy.select_action(state.to_numpy())
                         + np.random.normal(
                             0,
                             MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE,
@@ -346,6 +310,7 @@ def test(stock_names,
                         )
                     ).clip(-MAX_LIMIT, MAX_LIMIT)
         next_state, reward, done = env.step(action)
+        replay_buffer.add(state.to_numpy(), action, next_state.to_numpy(), reward, done_bool)
         state = next_state
         episode_reward += reward
         policy.train(replay_buffer, BATCH_SIZE)
