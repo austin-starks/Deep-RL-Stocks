@@ -3,41 +3,6 @@ import numpy as np
 import datetime
 pd.options.mode.chained_assignment = None
 
-class PastState(object):
-    """
-    Represents the past state of State
-    """
-    def __init__(self, days_in_state, max_size):
-        """
-        Initializes the past state
-        """
-        self.max_size = max_size
-        self.days_in_state = days_in_state
-        self.reset()
-    
-    def reset(self):
-        """
-        Resets the state to the initial state
-        """
-        self.data = np.zeros((self.max_size, self.days_in_state))
-        self.current_size = 0
-        self.shape = self.data.shape
-        
-    
-    def add(self, essential_state):
-        """
-        Adds the state to the past state queue
-        """
-        if self.current_size < self.max_size:
-            self.data[self.current_size] = essential_state
-            self.current_size += 1
-        else:
-            self.data = np.vstack((essential_state, self.data[:-1]))
-        
-
-
-
-
 
 class State(object):
     """
@@ -65,6 +30,8 @@ class State(object):
         self.dataframes = dict()
         self.stock_names = stock_names
         self.number_of_stocks = len(stock_names)
+        self.days_in_state = days_in_state
+        
         if type(stock_names) == str:
             stock_names = [stock_names]
         for stock_name in stock_names:
@@ -80,22 +47,15 @@ class State(object):
         self.past_state.add(self.essential_state)
         self.shape = self.essential_state.shape
         self.get_indicators()
-        self.indicator_state = self.get_indicator_state(current_date, current_time, days_in_state)
-        self.days_in_state = days_in_state
+        self.indicator_state = self.get_indicator_state(current_date, current_time)
       
     
-    def __len__(self):
-        """
-        Returns: The length of the state
-        """
-        return len(self.past_state)
-    
-    def get_indicator_state(self, current_date, current_time, days):
+    def get_indicator_state(self, current_date, current_time):
         """
         Returns: The past 'days' of the indicator state
         """
         date_arr = [int(x) for x in current_date.split('-')]
-        date_obj = datetime.date(date_arr[0], date_arr[1], date_arr[2]) - datetime.timedelta(days)
+        date_obj = datetime.date(date_arr[0], date_arr[1], date_arr[2]) - datetime.timedelta(self.days_in_state)
         past_date = str(date_obj)
         result = []
         for stock in self.stock_names:
@@ -106,11 +66,9 @@ class State(object):
                 open_price = data.loc[current_date]['Open']
                 data.loc[current_date] = 0
                 data.loc[current_date]['Open'] = open_price
-            data_as_numpy = data.to_numpy()
-            data_length = len(data_as_numpy)
-            if data_length < days:
-                data_as_numpy = np.pad(data_as_numpy, pad_width=((days - data_length, 0), (0,0)))
+            data_as_numpy = data.to_numpy()        
             result.append(data_as_numpy)
+
         return np.array(result)
 
     def get_stock_prices(self, current_date, current_time):
@@ -162,12 +120,13 @@ class State(object):
         Parameter current_date (string): The date of the new state
         Parameter current_time (string): The time of the new state
         """
-        self.past_state.add(self.essential_state)
+        if current_time == 'Close':
+            self.past_state.add(self.essential_state)
         stock_prices = self.get_stock_prices(current_date, current_time)
         self.essential_state = np.concatenate([
             np.array([remaining_money]), holdings, stock_prices
         ])  
-        self.indicator_state = self.get_indicator_state(current_date, current_time, self.days_in_state)
+        self.indicator_state = self.get_indicator_state(current_date, current_time)
 
     
     def get_indicators(self):
@@ -213,11 +172,6 @@ class State(object):
             df['rsi'] = rsi
             self.dataframes[stock] = self.dataframes[stock].dropna()
 
-
-
-
-
-
     
     def reset(self, starting_money, starting_shares, current_date, current_time):
         """
@@ -232,5 +186,62 @@ class State(object):
     def to_numpy(self):
         """
         Returns the numpy array representing the state object
+
+        Alias for self.get_state()
         """
-        return self.essential_state
+        return self.get_state()
+
+    def get_state(self):
+        """
+        Returns: the internal array representing the state
+        """
+        indicator_shape = self.indicator_state.shape
+        indicator_state = self.indicator_state.reshape((indicator_shape[1], indicator_shape[0] * indicator_shape[2]))
+        # np.pad(data_as_numpy, pad_width=((11, 0), (0,0)))
+        return indicator_state
+
+
+class PastState(object):
+    """
+    Represents the past state of State
+    """
+    def __init__(self, days_in_state, max_size):
+        """
+        Initializes the past state
+        """
+        self.max_size = max_size
+        self.days_in_state = days_in_state
+        self.reset()
+    
+    def __len__(self):
+        """
+        Returns: The length of the state
+        """
+        return len(self.data)
+    
+    def __getitem__(self, *args):
+        """
+        Returns: get item of the past state
+        """
+        return self.data.__getitem__(args)
+
+    def reset(self):
+        """
+        Resets the state to the initial state
+        """
+        self.data = np.zeros((self.max_size, self.days_in_state))
+        self.current_size = 0
+        self.shape = self.data.shape
+        
+    
+    def add(self, essential_state):
+        """
+        Adds the state to the past state queue
+        """
+        if self.current_size < self.max_size:
+            self.data[self.current_size] = essential_state
+            self.current_size += 1
+        else:
+            self.data = np.vstack((essential_state, self.data[:-1]))
+        
+
