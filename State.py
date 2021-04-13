@@ -1,23 +1,25 @@
 import pandas as pd
 import numpy as np
+import datetime
+pd.options.mode.chained_assignment = None
 
 class PastState(object):
     """
     Represents the past state of State
     """
-    def __init__(self, state_length, max_size=156):
+    def __init__(self, days_in_state, max_size):
         """
         Initializes the past state
         """
         self.max_size = max_size
-        self.state_length = state_length
+        self.days_in_state = days_in_state
         self.reset()
     
     def reset(self):
         """
         Resets the state to the initial state
         """
-        self.data = np.zeros((self.max_size, self.state_length))
+        self.data = np.zeros((self.max_size, self.days_in_state))
         self.current_size = 0
         self.shape = self.data.shape
         
@@ -41,7 +43,7 @@ class State(object):
     """
     Represents the internal state of an environment
     """
-    def __init__(self, stock_names, starting_money, starting_shares, current_date, current_time):
+    def __init__(self, stock_names, starting_money, starting_shares, current_date, current_time, days_in_state=156):
         """
         Initializes the State of the environment
 
@@ -74,10 +76,12 @@ class State(object):
         self.essential_state = np.concatenate([
             starting_money, starting_shares, self.get_stock_prices(current_date, current_time)
         ])
-        self.past_state = PastState(len(self.essential_state))
+        self.past_state = PastState(len(self.essential_state), days_in_state)
         self.past_state.add(self.essential_state)
         self.shape = self.essential_state.shape
         self.get_indicators()
+        self.indicator_state = self.get_indicator_state(current_date, current_time, days_in_state)
+        self.days_in_state = days_in_state
       
     
     def __len__(self):
@@ -85,6 +89,29 @@ class State(object):
         Returns: The length of the state
         """
         return len(self.past_state)
+    
+    def get_indicator_state(self, current_date, current_time, days):
+        """
+        Returns: The past 'days' of the indicator state
+        """
+        date_arr = [int(x) for x in current_date.split('-')]
+        date_obj = datetime.date(date_arr[0], date_arr[1], date_arr[2]) - datetime.timedelta(days)
+        past_date = str(date_obj)
+        result = []
+        for stock in self.stock_names:
+            data = self.dataframes[stock].loc[past_date: current_date]
+            if current_time == 'Open':
+                # We do not know the High, Low, Close, or indicators of the current date at open 
+                # We must zero them out so the agent is not looking at the future
+                open_price = data.loc[current_date]['Open']
+                data.loc[current_date] = 0
+                data.loc[current_date]['Open'] = open_price
+            data_as_numpy = data.to_numpy()
+            data_length = len(data_as_numpy)
+            if data_length < days:
+                data_as_numpy = np.pad(data_as_numpy, pad_width=((days - data_length, 0), (0,0)))
+            result.append(data_as_numpy)
+        return np.array(result)
 
     def get_stock_prices(self, current_date, current_time):
         """
@@ -140,6 +167,8 @@ class State(object):
         self.essential_state = np.concatenate([
             np.array([remaining_money]), holdings, stock_prices
         ])  
+        self.indicator_state = self.get_indicator_state(current_date, current_time, self.days_in_state)
+
     
     def get_indicators(self):
         """
@@ -165,19 +194,17 @@ class State(object):
             df["two_hundred_day_std_moving_average"] = df.rolling(window=200).std()['Close']
 
             # get bollander bands
-            df["bolliander_band"] = df.rolling(window=20).mean()['Close'] + 2 * df.rolling(window=20).std()['Close']
+            df["upper_bolliander_band"] = df.rolling(window=20).mean()['Close'] + 2 * df.rolling(window=20).std()['Close']
+            df["lower_bolliander_band"] = df.rolling(window=20).mean()['Close'] - 2 * df.rolling(window=20).std()['Close']
             
+            # get rsi
             diff = df['Close'].diff(1).dropna()       
             up_chg = 0 * diff
             down_chg = 0 * diff
             
             up_chg[diff > 0] = diff[ diff>0 ]            
             down_chg[diff < 0] = diff[ diff < 0 ]
-            
-            # check pandas documentation for ewm
-            # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.ewm.html
-            # values are related to exponential decay
-            # we set com=time_window-1 so we get decay alpha=1/time_window
+
             up_chg_avg   = up_chg.ewm(com=13 , min_periods=14).mean()
             down_chg_avg = down_chg.ewm(com=13 , min_periods=14).mean()
             
