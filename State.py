@@ -236,7 +236,7 @@ class PastState(object):
         Adds the state to the past state queue
         """
         if self.current_size < self.max_size:
-            self.data[self.current_size] = essential_state
+            self.data[self.max_size - self.current_size - 1] = essential_state
             self.current_size += 1
         else:
             self.data = np.vstack((essential_state, self.data[:-1]))
