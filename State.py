@@ -77,6 +77,8 @@ class State(object):
         self.past_state = PastState(len(self.essential_state))
         self.past_state.add(self.essential_state)
         self.shape = self.essential_state.shape
+        self.get_indicators()
+      
     
     def __len__(self):
         """
@@ -138,6 +140,57 @@ class State(object):
         self.essential_state = np.concatenate([
             np.array([remaining_money]), holdings, stock_prices
         ])  
+    
+    def get_indicators(self):
+        """
+        Adds indicators to the dataframe
+        """
+        for stock in self.stock_names:
+            # get MACD
+            df = self.dataframes[stock]
+            exp1 = df.ewm(span=12, adjust=False).mean()
+            exp2 = df.ewm(span=26, adjust=False).mean()
+            macd = exp1 - exp2
+            df['macd'] = macd['Close']
+
+            # get moving averages
+            df["seven_day_mean_moving_average"] = df.rolling(window=7).mean()['Close']
+            df["thirty_day_mean_moving_average"] = df.rolling(window=30).mean()['Close']
+            df["ninety_day_mean_moving_average"] = df.rolling(window=90).mean()['Close']
+            df["two_hundred_day_mean_moving_average"] = df.rolling(window=200).mean()['Close']
+
+            df["seven_day_std_moving_average"] = df.rolling(window=7).std()['Close']
+            df["thirty_day_std_moving_average"] = df.rolling(window=30).std()['Close']
+            df["ninety_day_std_moving_average"] = df.rolling(window=90).std()['Close']
+            df["two_hundred_day_std_moving_average"] = df.rolling(window=200).std()['Close']
+
+            # get bollander bands
+            df["bolliander_band"] = df.rolling(window=20).mean()['Close'] + 2 * df.rolling(window=20).std()['Close']
+            
+            diff = df['Close'].diff(1).dropna()       
+            up_chg = 0 * diff
+            down_chg = 0 * diff
+            
+            up_chg[diff > 0] = diff[ diff>0 ]            
+            down_chg[diff < 0] = diff[ diff < 0 ]
+            
+            # check pandas documentation for ewm
+            # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.ewm.html
+            # values are related to exponential decay
+            # we set com=time_window-1 so we get decay alpha=1/time_window
+            up_chg_avg   = up_chg.ewm(com=13 , min_periods=14).mean()
+            down_chg_avg = down_chg.ewm(com=13 , min_periods=14).mean()
+            
+            rs = abs(up_chg_avg/down_chg_avg)
+            rsi = 100 - 100/(1+rs)
+            df['rsi'] = rsi
+            self.dataframes[stock] = self.dataframes[stock].dropna()
+
+
+
+
+
+
     
     def reset(self, starting_money, starting_shares, current_date, current_time):
         """
