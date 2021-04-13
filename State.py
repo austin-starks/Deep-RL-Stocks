@@ -45,9 +45,9 @@ class State(object):
         ])
         self.past_state = PastState(len(self.essential_state), days_in_state)
         self.past_state.add(self.essential_state)
-        self.shape = self.essential_state.shape
         self.get_indicators()
         self.indicator_state = self.get_indicator_state(current_date, current_time)
+        self.shape = self.get_state().shape
       
     
     def get_indicator_state(self, current_date, current_time):
@@ -195,10 +195,7 @@ class State(object):
         """
         Returns: the internal array representing the state
         """
-        indicator_shape = self.indicator_state.shape
-        indicator_state = self.indicator_state.reshape((indicator_shape[1], indicator_shape[0] * indicator_shape[2]))
-        # np.pad(data_as_numpy, pad_width=((11, 0), (0,0)))
-        return indicator_state
+        return self.essential_state
 
 
 class PastState(object):
