@@ -3,7 +3,7 @@ from gym import spaces
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from models.model import TD3, ReplayBuffer
+from models.model_alternative import TD3, ReplayBuffer
 from models.state import State
 import random
 import re
@@ -11,11 +11,11 @@ import datetime
 import utility.utils as utils
 import os.path
 
-NUMBER_OF_ITERATIONS = 50000
-MAX_LIMIT = 10
-START_TIMESTEPS = 2500
+NUMBER_OF_ITERATIONS = 100000
+MAX_LIMIT = 200
+START_TIMESTEPS = 5000
 BATCH_SIZE = 128
-STD_GAUSSIAN_EXPLORATION_NOISE = 0.1
+STD_GAUSSIAN_EXPLORATION_NOISE = 0.4
 
 
 class StockEnv(gym.Env):
@@ -65,12 +65,13 @@ class StockEnv(gym.Env):
         )
 
     def calculate_reward(self, holdings, remaining_money, stock_prices_new):
+        value_last = self.value_at_last_timestep
         r = (
             remaining_money
             + np.sum(holdings * (stock_prices_new))
-            - self.starting_amount
         )
-        return r
+        self.value_at_last_timestep = r
+        return r - value_last
 
     def step(self, action):
         """
@@ -137,6 +138,7 @@ class StockEnv(gym.Env):
             starting_shares = [0 for _ in range(self.number_of_stocks)]
         starting_money = np.array(starting_money)
         starting_shares = np.array(starting_shares)
+        self.value_at_last_timestep = 0
         self.initialize_starting_epoch(self.start_date, self.end_date)
         
         current_date, current_time = self.get_date_and_time()
@@ -278,8 +280,8 @@ def run(stock_names,
                 episode_reward = 0
                 episode_timesteps = 0
                 episode_num += 1
-                # policy.save(save_location)
             pbar.update()
+    policy.save(save_location)
     return policy, replay_buffer
     
 def append_portfolio_value(df, env):
@@ -307,15 +309,15 @@ def test(stock_names,
         action = (policy.select_action(state.to_numpy())
                         + np.random.normal(
                             0,
-                            MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE,
+                            MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE * 0.5,
                             size=env.action_space.shape[0],
                         )
                     ).clip(-MAX_LIMIT, MAX_LIMIT)
         next_state, reward, done = env.step(action)
         done_bool = float(done)
-        replay_buffer.add(state.to_numpy(), action, next_state.to_numpy(), reward, done_bool)
+        # replay_buffer.add(state.to_numpy(), action, next_state.to_numpy(), reward, done_bool)
         state = next_state
         episode_reward += reward
-        policy.train(replay_buffer, BATCH_SIZE)
+        # policy.train(replay_buffer, BATCH_SIZE)
         df = append_portfolio_value(df, env)            
     df.to_csv('test_results.csv')

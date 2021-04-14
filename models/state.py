@@ -1,14 +1,13 @@
 import pandas as pd
 import numpy as np
 import datetime
-pd.options.mode.chained_assignment = None
 
 
 class State(object):
     """
     Represents the internal state of an environment
     """
-    def __init__(self, stock_names, starting_money, starting_shares, current_date, current_time, days_in_state=156):
+    def __init__(self, stock_names, starting_money, starting_shares, current_date, current_time, days_in_state=60):
         """
         Initializes the State of the environment
 
@@ -59,7 +58,7 @@ class State(object):
         past_date = str(date_obj)
         result = []
         for stock in self.stock_names:
-            data = self.dataframes[stock].loc[past_date: current_date]
+            data = self.dataframes[stock].copy().loc[past_date: current_date]
             if current_time == 'Open':
                 # We do not know the High, Low, Close, or indicators of the current date at open 
                 # We must zero them out so the agent is not looking at the future
@@ -128,6 +127,7 @@ class State(object):
         ])  
         self.indicator_state = self.get_indicator_state(current_date, current_time)
 
+
     
     def get_indicators(self):
         """
@@ -195,7 +195,19 @@ class State(object):
         """
         Returns: the internal array representing the state
         """
-        return self.essential_state
+        num_stocks, length, num_indicators = self.indicator_state.shape
+        reshaped_indicator_state = self.indicator_state.reshape((length, num_stocks * num_indicators))
+        reshaped_indicator_state = reshaped_indicator_state[0:int(self.days_in_state/2)]
+        past_state = self.past_state.copy()
+        if past_state.shape[0] < reshaped_indicator_state.shape[0]:
+            past_state = np.pad(past_state, ((0,reshaped_indicator_state.shape[0] - past_state.shape[0]), (0,0)))
+        elif past_state.shape[0] > reshaped_indicator_state.shape[0]:
+            reshaped_indicator_state = np.pad(reshaped_indicator_state, ((0,past_state.shape[0] - reshaped_indicator_state.shape[0]), (0,0)))
+        if past_state.shape[1] < reshaped_indicator_state.shape[1]:
+            past_state = np.pad(past_state, ((0,0), (0,reshaped_indicator_state.shape[1] - past_state.shape[1])))
+        elif past_state.shape[1] > reshaped_indicator_state.shape[1] :
+            reshaped_indicator_state = np.pad(reshaped_indicator_state, ((0,0), (0,past_state.shape[1] - reshaped_indicator_state.shape[1])))
+        return np.concatenate((past_state, reshaped_indicator_state), 1).flatten()
 
 
 class PastState(object):
@@ -240,5 +252,11 @@ class PastState(object):
             self.current_size += 1
         else:
             self.data = np.vstack((essential_state, self.data[:-1]))
+    
+    def copy(self):
+        """
+        Returns a copy of the internal state
+        """
+        return self.data.copy()
         
 
