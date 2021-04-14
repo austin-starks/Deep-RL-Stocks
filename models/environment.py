@@ -3,12 +3,12 @@ from gym import spaces
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from model import TD3, ReplayBuffer
-from State import State
+from models.model import TD3, ReplayBuffer
+from models.state import State
 import random
 import re
 import datetime
-import utils
+import utility.utils as utils
 import os.path
 
 NUMBER_OF_ITERATIONS = 50000
