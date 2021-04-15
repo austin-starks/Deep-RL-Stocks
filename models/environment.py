@@ -11,11 +11,11 @@ import datetime
 import utility.utils as utils
 import os.path
 
-NUMBER_OF_ITERATIONS = 100000
+NUMBER_OF_ITERATIONS = 40000
 MAX_LIMIT = 200
 START_TIMESTEPS = 5000
 BATCH_SIZE = 128
-STD_GAUSSIAN_EXPLORATION_NOISE = 0.4
+STD_GAUSSIAN_EXPLORATION_NOISE = 0.1
 
 
 class StockEnv(gym.Env):
@@ -64,13 +64,15 @@ class StockEnv(gym.Env):
             low=-MAX_LIMIT, high=MAX_LIMIT, shape=(self.number_of_stocks,), dtype=np.int
         )
 
-    def calculate_reward(self, holdings, remaining_money, stock_prices_new):
+    def calculate_reward(self, holdings, remaining_money, stock_prices_new, action_is_invalid=False):
         value_last = self.value_at_last_timestep
         r = (
             remaining_money
             + np.sum(holdings * (stock_prices_new))
         )
         self.value_at_last_timestep = r
+        if action_is_invalid:
+            r = r - 100000
         return r - value_last
 
     def step(self, action):
@@ -87,12 +89,13 @@ class StockEnv(gym.Env):
         stock_prices_old = self.state.get_stock_prices(current_date, current_time)
         # perform action: if buying, add positions. if selling, subtract positions.
         # change buying power
-        holdings, remaining_money = self.state.get_new_holdings(action, stock_prices_old)
+        holdings, remaining_money, action_is_invalid = self.state.get_new_holdings(action, stock_prices_old)
         self.increment_date()
         new_date, new_time = self.get_date_and_time()
         stock_prices_new = self.state.get_stock_prices(new_date, new_time)
         self.state.advance_state(remaining_money, holdings, new_date, new_time)
-        reward = self.calculate_reward(holdings, remaining_money, stock_prices_new)
+        # reward = self.calculate_reward(holdings, remaining_money, stock_prices_new, action_is_invalid)
+        reward = 1000 if action < 50 and action > -50 else -1000
         return self.state, reward, self.is_done()
         
 
@@ -309,7 +312,7 @@ def test(stock_names,
         action = (policy.select_action(state.to_numpy())
                         + np.random.normal(
                             0,
-                            MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE * 0.5,
+                            MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE,
                             size=env.action_space.shape[0],
                         )
                     ).clip(-MAX_LIMIT, MAX_LIMIT)
