@@ -221,16 +221,15 @@ def run(stock_names,
         random_start=True, 
         save_location="results/initial_policy"):
     env = StockEnv(stock_names, start_date, end_date, random_start=random_start)
-    
     utils.log_info("Environment Initilized")
-    policy = TD3(env.state.shape[0], env.action_space.shape[0], max_action=MAX_LIMIT)
+    policy = TD3(env.state.shape, env.action_space.shape[0], max_action=MAX_LIMIT)
 
     # os.path.exists('initial_policy')
     if os.path.exists(save_location + "_actor"):
         print("Loaded policy")
         policy.load(save_location)
 
-    replay_buffer = ReplayBuffer(env.state.shape[0], env.action_space.shape[0])
+    replay_buffer = ReplayBuffer(env.state.shape, env.action_space.shape[0])
     state, done = env.reset(), False
     episode_reward = 0
     episode_timesteps = 0

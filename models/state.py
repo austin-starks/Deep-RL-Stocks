@@ -210,7 +210,7 @@ class State(object):
             past_state = np.pad(past_state, ((0,0), (0,reshaped_indicator_state.shape[1] - past_state.shape[1])))
         elif past_state.shape[1] > reshaped_indicator_state.shape[1] :
             reshaped_indicator_state = np.pad(reshaped_indicator_state, ((0,0), (0,past_state.shape[1] - reshaped_indicator_state.shape[1])))
-        return np.concatenate((past_state, reshaped_indicator_state), 1).flatten()
+        return np.concatenate((past_state, reshaped_indicator_state), 1)
 
 
 class PastState(object):
