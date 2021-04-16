@@ -12,7 +12,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Paper: https://arxiv.org/abs/1802.09477
 # Original Implementation found on https://github.com/sfujim/TD3/blob/master/TD3.py
 class Encoder(nn.Module):
-    def __init__(self, inchannel, hidden_size, outchannel, state_length, activation=nn.ReLU):
+    def __init__(self, inchannel, hidden_size, outchannel, state_length, activation=nn.PReLU):
         super(Encoder, self).__init__()
         self.layers = nn.Sequential(
             nn.Conv1d(inchannel, hidden_size, kernel_size=3, padding=1),
@@ -26,16 +26,14 @@ class Encoder(nn.Module):
             self.shortcut = nn.Identity()
         else:
             self.shortcut = nn.Conv1d(inchannel, outchannel, kernel_size=1)
-        # self.rnn = nn.GRU(state_length, hidden_size, batch_first=True, dropout=0.25, bidirectional=True, num_layers=2)
         self.output = nn.Linear(outchannel * state_length, outchannel)
     
     def forward(self, X):
         out =  self.layers(X)
         shortcut = self.shortcut(X)
         out = self.relu(out + shortcut)
-        # out = self.rnn(out)[0]
         shape = out.shape
-        out = self.output(out.reshape((shape[0], shape[1] * shape[2])))
+        out = self.output(out.reshape((shape[0], shape[1] * shape[2])))        
         return out
 
 class Actor(nn.Module):
