@@ -7,7 +7,7 @@ class State(object):
     """
     Represents the internal state of an environment
     """
-    def __init__(self, stock_names, starting_money, starting_shares, current_date, current_time, days_in_state=60):
+    def __init__(self, stock_names, starting_money, starting_shares, current_date, current_time, days_in_state=100):
         """
         Initializes the State of the environment
 
@@ -43,7 +43,7 @@ class State(object):
             starting_money, starting_shares, self.get_stock_prices(current_date, current_time)
         ])
         self.past_state = PastState(len(self.essential_state), days_in_state)
-        self.past_state.add(self.essential_state)
+        # self.past_state.add(self.essential_state)
         self.get_indicators()
         self.indicator_state = self.get_indicator_state(current_date, current_time)
         self.shape = self.get_state().shape
@@ -89,15 +89,21 @@ class State(object):
         new_holdings = []
         invalid_action = False
         for a, holding, price in zip(action, old_holdings, stock_prices):
-            if a <= 100:
-                a *= -1 
+            # a can be up to 500
+            # if a is 0 - 200: a = -200 - -0
+            # if a is 200 - 300: a is 0
+            # if a is 300 - 500: a = a - 100
+            if a < 200:
+                a = a - 700
+            elif a < 300:
+                a = 0
             else:
-                a -= 100
+                a = a - 100
             if current_cash - (a * price) >= 0 and holding + a >= 0:
                 new_holdings.append(max(0, holding + a))
                 current_cash -= a * price
             else:
-                if action != 0:
+                if a != 0:
                     invalid_action = True
                 new_holdings.append(holding)
         return np.array(new_holdings), current_cash, invalid_action
@@ -126,8 +132,8 @@ class State(object):
         Parameter current_date (string): The date of the new state
         Parameter current_time (string): The time of the new state
         """
-        if current_time == 'Close':
-            self.past_state.add(self.essential_state)
+        # if current_time == 'Close':
+        #     self.past_state.add(self.essential_state)
         stock_prices = self.get_stock_prices(current_date, current_time)
         self.essential_state = np.concatenate([
             np.array([remaining_money]), holdings, stock_prices
@@ -187,8 +193,8 @@ class State(object):
         self.essential_state = np.concatenate([
             starting_money, starting_shares, self.get_stock_prices(current_date, current_time)
         ])
-        self.past_state.reset()
-        self.past_state.add(self.essential_state)
+        # self.past_state.reset()
+        # self.past_state.add(self.essential_state)
     
     def to_numpy(self):
         """
@@ -204,17 +210,21 @@ class State(object):
         """
         num_stocks, length, num_indicators = self.indicator_state.shape
         reshaped_indicator_state = self.indicator_state.reshape((length, num_stocks * num_indicators))
-        reshaped_indicator_state = reshaped_indicator_state[0:int(self.days_in_state/2)]
-        past_state = self.past_state.copy()
-        if past_state.shape[0] < reshaped_indicator_state.shape[0]:
-            past_state = np.pad(past_state, ((0,reshaped_indicator_state.shape[0] - past_state.shape[0]), (0,0)))
-        elif past_state.shape[0] > reshaped_indicator_state.shape[0]:
-            reshaped_indicator_state = np.pad(reshaped_indicator_state, ((0,past_state.shape[0] - reshaped_indicator_state.shape[0]), (0,0)))
-        if past_state.shape[1] < reshaped_indicator_state.shape[1]:
-            past_state = np.pad(past_state, ((0,0), (0,reshaped_indicator_state.shape[1] - past_state.shape[1])))
-        elif past_state.shape[1] > reshaped_indicator_state.shape[1] :
-            reshaped_indicator_state = np.pad(reshaped_indicator_state, ((0,0), (0,past_state.shape[1] - reshaped_indicator_state.shape[1])))
-        return np.concatenate((past_state, reshaped_indicator_state), 1)
+        reshaped_indicator_state = reshaped_indicator_state[0:int(0.6 * self.days_in_state)]
+        # past_state = self.past_state.copy()
+        # if past_state.shape[0] < reshaped_indicator_state.shape[0]:
+        #     past_state = np.pad(past_state, ((0,reshaped_indicator_state.shape[0] - past_state.shape[0]), (0,0)))
+        # elif past_state.shape[0] > reshaped_indicator_state.shape[0]:
+        #     reshaped_indicator_state = np.pad(reshaped_indicator_state, ((0,past_state.shape[0] - reshaped_indicator_state.shape[0]), (0,0)))
+        # if past_state.shape[1] < reshaped_indicator_state.shape[1]:
+        #     past_state = np.pad(past_state, ((0,0), (0,reshaped_indicator_state.shape[1] - past_state.shape[1])))
+        # elif past_state.shape[1] > reshaped_indicator_state.shape[1] :
+        #     reshaped_indicator_state = np.pad(reshaped_indicator_state, ((0,0), (0,past_state.shape[1] - reshaped_indicator_state.shape[1])))
+        # return np.concatenate((past_state, reshaped_indicator_state), 1)
+        # print(self.days_in_state)
+        # print(self.indicator_state[0: int(0.3 * self.days_in_state)])
+        return reshaped_indicator_state
+
 
 
 class PastState(object):

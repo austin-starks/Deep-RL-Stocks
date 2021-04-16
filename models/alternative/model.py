@@ -145,7 +145,7 @@ class TD3(object):
             )
 
             next_action = (self.actor_target(next_state) + noise).clamp(
-                -self.max_action, self.max_action
+                0, self.max_action
             )
 
             # Compute the target Q value
