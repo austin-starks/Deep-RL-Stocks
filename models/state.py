@@ -87,13 +87,16 @@ class State(object):
         old_holdings = self.essential_state[1 : 1 + self.number_of_stocks]
         current_cash = self.essential_state[0]
         new_holdings = []
+        invalid_action = False
         for a, holding, price in zip(action, old_holdings, stock_prices):
             if current_cash - (a * price) >= 0 and holding + a >= 0:
                 new_holdings.append(max(0, holding + a))
                 current_cash -= a * price
             else:
+                if action != 0:
+                    invalid_action = True
                 new_holdings.append(holding)
-        return np.array(new_holdings), current_cash
+        return np.array(new_holdings), current_cash, invalid_action
     
     def get_holdings(self):
         """
