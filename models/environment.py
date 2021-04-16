@@ -94,8 +94,7 @@ class StockEnv(gym.Env):
         new_date, new_time = self.get_date_and_time()
         stock_prices_new = self.state.get_stock_prices(new_date, new_time)
         self.state.advance_state(remaining_money, holdings, new_date, new_time)
-        # reward = self.calculate_reward(holdings, remaining_money, stock_prices_new, action_is_invalid)
-        reward = 1000 if action < 50 and action > -50 else -1000
+        reward = self.calculate_reward(holdings, remaining_money, stock_prices_new, action_is_invalid)
         return self.state, reward, self.is_done()
         
 
