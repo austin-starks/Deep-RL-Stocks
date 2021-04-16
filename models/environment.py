@@ -11,7 +11,7 @@ import datetime
 import utility.utils as utils
 import os.path
 
-NUMBER_OF_ITERATIONS = 40000
+NUMBER_OF_ITERATIONS = 100000
 MAX_LIMIT = 200
 START_TIMESTEPS = 5000
 BATCH_SIZE = 128
@@ -61,7 +61,7 @@ class StockEnv(gym.Env):
         self.reset(init=True)
 
         self.action_space = spaces.Box(
-            low=-MAX_LIMIT, high=MAX_LIMIT, shape=(self.number_of_stocks,), dtype=np.int
+            low=0, high=MAX_LIMIT, shape=(self.number_of_stocks,), dtype=np.int
         )
 
     def calculate_reward(self, holdings, remaining_money, stock_prices_new, action_is_invalid=False):
@@ -72,7 +72,7 @@ class StockEnv(gym.Env):
         )
         self.value_at_last_timestep = r
         if action_is_invalid:
-            r = r - 100000
+            r = r - 20 # can penalize invalid actions
         return r - value_last
 
     def step(self, action):
@@ -250,10 +250,10 @@ def run(stock_names,
                         MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE,
                         size=env.action_space.shape[0],
                     )
-                ).clip(-MAX_LIMIT, MAX_LIMIT)
+                ).clip(0, MAX_LIMIT)
                 action = action.astype(int)
             # Perform action
-            next_state, reward, done = env.step(action)
+            next_state, reward, done = env.step(action.flatten())
             if pbar.n % 50 == 0:
                 # utils.log_info(f"Date and Time: {env.get_date_and_time()}")
                 # utils.log_info(f"Current Portfolio Value: {env.calculate_portfolio_value()}")
@@ -281,8 +281,9 @@ def run(stock_names,
                 episode_reward = 0
                 episode_timesteps = 0
                 episode_num += 1
+                policy.save(save_location)
+
             pbar.update()
-    policy.save(save_location)
     return policy, replay_buffer
     
 def append_portfolio_value(df, env):
@@ -314,7 +315,8 @@ def test(stock_names,
                             size=env.action_space.shape[0],
                         )
                     ).clip(-MAX_LIMIT, MAX_LIMIT)
-        next_state, reward, done = env.step(action)
+
+        next_state, reward, done = env.step(action.flatten())
         done_bool = float(done)
         # replay_buffer.add(state.to_numpy(), action, next_state.to_numpy(), reward, done_bool)
         state = next_state

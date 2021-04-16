@@ -89,6 +89,10 @@ class State(object):
         new_holdings = []
         invalid_action = False
         for a, holding, price in zip(action, old_holdings, stock_prices):
+            if a <= 100:
+                a *= -1 
+            else:
+                a -= 100
             if current_cash - (a * price) >= 0 and holding + a >= 0:
                 new_holdings.append(max(0, holding + a))
                 current_cash -= a * price

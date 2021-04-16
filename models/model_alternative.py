@@ -11,9 +11,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Implementation of Twin Delayed Deep Deterministic Policy Gradients (TD3)
 # Paper: https://arxiv.org/abs/1802.09477
 # Original Implementation found on https://github.com/sfujim/TD3/blob/master/TD3.py
-class CNN(nn.Module):
+class Encoder(nn.Module):
     def __init__(self, inchannel, hidden_size, outchannel, state_length, activation=nn.ReLU):
-        super(CNN, self).__init__()
+        super(Encoder, self).__init__()
         self.layers = nn.Sequential(
             nn.Conv1d(inchannel, hidden_size, kernel_size=3, padding=1),
             nn.BatchNorm1d(hidden_size),
@@ -26,30 +26,35 @@ class CNN(nn.Module):
             self.shortcut = nn.Identity()
         else:
             self.shortcut = nn.Conv1d(inchannel, outchannel, kernel_size=1)
+        # self.rnn = nn.GRU(state_length, hidden_size, batch_first=True, dropout=0.25, bidirectional=True, num_layers=2)
         self.output = nn.Linear(outchannel * state_length, outchannel)
     
     def forward(self, X):
         out =  self.layers(X)
         shortcut = self.shortcut(X)
         out = self.relu(out + shortcut)
-        out = self.output(out.view(out.size(0), -1))
+        # out = self.rnn(out)[0]
+        shape = out.shape
+        out = self.output(out.reshape((shape[0], shape[1] * shape[2])))
         return out
 
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action, state_length):
         super(Actor, self).__init__()
-        self.conv = CNN(state_dim, 64, 64, state_length)
+        self.conv = Encoder(state_dim, 64, 64, state_length)
         self.l1 = nn.Linear(64 , 64)
         self.l2 = nn.Linear(64, 64)
-        self.l3 = nn.Linear(64, action_dim)
+        self.l3 = nn.Linear(64, action_dim * max_action)
 
+        self.action_dim = action_dim
         self.max_action = max_action
 
     def forward(self, state):
         state = self.conv(state)
         a = F.relu(self.l1(state))
         a = F.relu(self.l2(a))
-        return self.max_action * torch.tanh(self.l3(a))
+        a = self.l3(a).view(a.size(0), self.action_dim, self.max_action)
+        return a.argmax(-1)
 
 
 class Critic(nn.Module):
@@ -57,13 +62,13 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
 
         # Q1 architecture
-        self.conv = CNN(state_dim, 64, 64, state_length)
+        self.conv = Encoder(state_dim, 64, 64, state_length)
         self.l1 = nn.Linear(64 + action_dim, 64)
         self.l2 = nn.Linear(64, 64)
         self.l3 = nn.Linear(64, 1)
 
         # Q2 architecture
-        self.conv2 = CNN(state_dim, 64, 64, state_length)
+        self.conv2 = Encoder(state_dim, 64, 64, state_length)
         self.l4 = nn.Linear(64 + action_dim, 64)
         self.l5 = nn.Linear(64, 64)
         self.l6 = nn.Linear(64, 1)
@@ -126,7 +131,8 @@ class TD3(object):
             state = torch.FloatTensor([state]).to(device)
         else:
             state = torch.FloatTensor(state).to(device)
-        return self.actor(state).cpu().data.numpy().flatten()
+        action = self.actor(state).cpu().data.numpy()
+        return action
 
     def train(self, replay_buffer, batch_size=100):
         self.total_it += 1
