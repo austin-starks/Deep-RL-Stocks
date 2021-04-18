@@ -1,0 +1,5 @@
+Continious action space with traditional TD3 algorithm 
+Actions in range [-1,..., 1]
+    -1 equals sell all
+    1 equals buy all 
+    0 means hold 

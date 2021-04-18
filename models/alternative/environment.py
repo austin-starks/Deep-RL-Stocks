@@ -8,15 +8,6 @@ from models.alternative.state import State
 import random
 import re
 import datetime
-import utility.utils as utils
-import os.path
-
-NUMBER_OF_ITERATIONS = 100000
-MAX_LIMIT = 200
-START_TIMESTEPS = 5000
-BATCH_SIZE = 128
-EPSILON = 0.05
-
 
 
 class StockEnv(gym.Env):
@@ -26,16 +17,16 @@ class StockEnv(gym.Env):
     The environment keeps track of where the agent is after taking action a in 
     state s.
     """
-
     def __init__(
         self,
         stock_names,
         start_date,
         end_date,
-        starting_amount_lower=10000,
+        max_limit,
+        starting_amount_lower=20000,
         starting_amount_upper=50000,
         random_start=False,
-        invalid_action_penalty = 5
+        invalid_action_penalty=5
     ):
         """
         Initializes the environment.
@@ -63,7 +54,7 @@ class StockEnv(gym.Env):
         self.reset(init=True)
 
         self.action_space = spaces.Box(
-            low=0, high=MAX_LIMIT, shape=(self.number_of_stocks,), dtype=np.int32
+            low=-max_limit, high=max_limit, shape=(self.number_of_stocks,), dtype=np.float32
         )
         self.invalid_action_penalty = invalid_action_penalty
 
@@ -216,105 +207,3 @@ class StockEnv(gym.Env):
         else:
             self.epochs = -1
         self.increment_date()  # needed to be sure we're not on a weekend/holiday
-
-
-
-def run(stock_names, 
-        start_date, 
-        end_date, 
-        random_start=True, 
-        save_location="results/initial_policy"):
-    env = StockEnv(stock_names, start_date, end_date, random_start=random_start)
-    utils.log_info("Environment Initilized")
-    policy = TD3(env.state.shape, env.action_space.shape[0], max_action=MAX_LIMIT)
-
-    # os.path.exists('initial_policy')
-    if os.path.exists(save_location + "_actor"):
-        print("Loaded policy")
-        policy.load(save_location)
-
-    replay_buffer = ReplayBuffer(env.state.shape, env.action_space.shape[0])
-    state, done = env.reset(), False
-    episode_reward = 0
-    episode_timesteps = 0
-    episode_num = 0
-
-    with tqdm(total=NUMBER_OF_ITERATIONS) as pbar:
-        for t in range(NUMBER_OF_ITERATIONS):
-            episode_timesteps += 1
-
-            # Select action randomly or according to policy
-            if t < START_TIMESTEPS or random.random() < EPSILON:
-                action = env.action_space.sample()
-            else:
-                action = policy.select_action(state.to_numpy())
-                # action = action.astype(int)
-            # Perform action
-            next_state, reward, done = env.step(action.flatten())
-            if pbar.n % 50 == 0:
-                # utils.log_info(f"Date and Time: {env.get_date_and_time()}")
-                # utils.log_info(f"Current Portfolio Value: {env.calculate_portfolio_value()}")
-                pbar.set_description(f"Date: {env.get_date_and_time()[0]} | Reward: {reward} | Action: {action} | Holdings: {env.get_holdings()}")
-            
-            if pbar.n % 200 == 0:
-                policy.save(save_location)
-            
-            done_bool = float(done) if episode_timesteps < env.max_epochs else 0
-
-            # Store data in replay buffer
-            replay_buffer.add(state.to_numpy(), action, next_state.to_numpy(), reward, done_bool)
-
-            state = next_state
-            episode_reward += reward
-
-            # Train agent after collecting sufficient data
-            if t >= START_TIMESTEPS:
-                policy.train(replay_buffer, BATCH_SIZE)
-
-            if done:
-                # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
-                # print(
-                #     f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}"
-                # )
-                # Reset environment
-                state, done = env.reset(), False
-                episode_reward = 0
-                episode_timesteps = 0
-                episode_num += 1
-            pbar.update()
-    return policy, replay_buffer
-    
-def append_portfolio_value(df, env):
-    value = env.calculate_portfolio_value()
-    date, time = env.get_date_and_time()
-    time = '09:30AM' if time == 'Open' else '04:00PM'
-    datetime = date + " " + time
-    return df.append(pd.DataFrame([round(value, 2)], columns=['Portfolio Value'], index=[datetime]))
-
-def test(stock_names,
-        start_date,
-        end_date,
-        policy,
-        replay_buffer,
-        save_location='results/initial_policy'
-        ):
-    env = StockEnv(stock_names, start_date=start_date, end_date=end_date, random_start=False)
-    utils.log_info("Testing policy")
-    state, done = env.reset(), False
-    episode_reward = 0
-    df = pd.DataFrame(columns=['Portfolio Value'])
-    df = append_portfolio_value(df, env)
-    
-    while not done:
-        # print(env.get_date_and_time())
-        action = policy.select_action(state.to_numpy())
-        # print("action", action)
-
-        next_state, reward, done = env.step(action.flatten())
-        done_bool = float(done)
-        # replay_buffer.add(state.to_numpy(), action, next_state.to_numpy(), reward, done_bool)
-        state = next_state
-        episode_reward += reward
-        # policy.train(replay_buffer, BATCH_SIZE)
-        df = append_portfolio_value(df, env)            
-    df.to_csv(save_location, index_label='Date')

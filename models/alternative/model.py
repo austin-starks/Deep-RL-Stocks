@@ -45,17 +45,16 @@ class Actor(nn.Module):
         self.conv = Encoder(ind_state_dim, ind_state_length, imm_state_dim, 64, 64)
         self.l1 = nn.Linear(64 , 64)
         self.l2 = nn.Linear(64, 64)
-        self.l3 = nn.Linear(64, action_dim * max_action)
+        self.l3 = nn.Linear(64, action_dim)
 
-        self.action_dim = action_dim
         self.max_action = max_action
+
 
     def forward(self, ind_state, imm_state_dim):
         ind_state = self.conv(ind_state, imm_state_dim)
         a = F.relu(self.l1(ind_state))
         a = F.relu(self.l2(a))
-        a = self.l3(a).view(a.size(0), self.action_dim, self.max_action)
-        return a.argmax(-1)
+        return self.max_action * torch.tanh(self.l3(a))
 
 
 class Critic(nn.Module):
@@ -146,7 +145,13 @@ class TD3(object):
 
         with torch.no_grad():
             # Select action according to policy 
-            next_action = self.actor_target(next_ind_state, next_imm_state)
+            noise = (torch.randn_like(action) * self.policy_noise).clamp(
+                -self.noise_clip, self.noise_clip
+            )
+
+            next_action = (self.actor_target(next_ind_state, next_imm_state) + noise).clamp(
+                -self.max_action, self.max_action
+            )
 
             # Compute the target Q value
             target_Q1, target_Q2 = self.critic_target(next_ind_state, next_imm_state, next_action)
