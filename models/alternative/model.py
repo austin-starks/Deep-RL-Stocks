@@ -12,7 +12,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Paper: https://arxiv.org/abs/1802.09477
 # Original Implementation found on https://github.com/sfujim/TD3/blob/master/TD3.py
 class Encoder(nn.Module):
-    def __init__(self, inchannel, state_length, hidden_size, outchannel, activation=nn.PReLU):
+    def __init__(self, inchannel, state_length, immediate_state_dim, hidden_size, outchannel, activation=nn.ReLU):
         super(Encoder, self).__init__()
         self.layers = nn.Sequential(
             nn.Conv1d(inchannel, hidden_size, kernel_size=3, padding=1),
@@ -26,20 +26,23 @@ class Encoder(nn.Module):
             self.shortcut = nn.Identity()
         else:
             self.shortcut = nn.Conv1d(inchannel, outchannel, kernel_size=1)
-        self.output = nn.Linear(outchannel * state_length, outchannel)
+        self.immediate_state_dim = immediate_state_dim
+        self.output = nn.Linear(outchannel * state_length + immediate_state_dim, outchannel)
     
-    def forward(self, X):
+    def forward(self, X, X_immediate):
         out =  self.layers(X)
         shortcut = self.shortcut(X)
         out = self.relu(out + shortcut)
         shape = out.shape
-        out = self.output(out.reshape((shape[0], shape[1] * shape[2])))        
+        out = out.reshape((shape[0], shape[1] * shape[2]))
+        out = torch.cat([out, X_immediate], 1) 
+        out = self.output(out)   
         return out
 
 class Actor(nn.Module):
     def __init__(self, ind_state_dim, ind_state_length, imm_state_dim, action_dim, max_action):
         super(Actor, self).__init__()
-        self.conv = Encoder(ind_state_dim, ind_state_length, 64, 64)
+        self.conv = Encoder(ind_state_dim, ind_state_length, imm_state_dim, 64, 64)
         self.l1 = nn.Linear(64 , 64)
         self.l2 = nn.Linear(64, 64)
         self.l3 = nn.Linear(64, action_dim * max_action)
@@ -48,7 +51,7 @@ class Actor(nn.Module):
         self.max_action = max_action
 
     def forward(self, ind_state, imm_state_dim):
-        ind_state = self.conv(ind_state)
+        ind_state = self.conv(ind_state, imm_state_dim)
         a = F.relu(self.l1(ind_state))
         a = F.relu(self.l2(a))
         a = self.l3(a).view(a.size(0), self.action_dim, self.max_action)
@@ -60,25 +63,25 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
 
         # Q1 architecture
-        self.conv = Encoder(indicator_state_dim, state_length, 64, 64)
+        self.conv = Encoder(indicator_state_dim, state_length, immediate_state_dim, 64, 64)
         self.l1 = nn.Linear(64 + action_dim, 64)
         self.l2 = nn.Linear(64, 64)
         self.l3 = nn.Linear(64, 1)
 
         # Q2 architecture
-        self.conv2 = Encoder(indicator_state_dim, state_length, 64, 64)
+        self.conv2 = Encoder(indicator_state_dim, state_length, immediate_state_dim, 64, 64)
         self.l4 = nn.Linear(64 + action_dim, 64)
         self.l5 = nn.Linear(64, 64)
         self.l6 = nn.Linear(64, 1)
 
     def forward(self, indicator_state_dim, immediate_state_dim, action):
-        sa1 = self.conv(indicator_state_dim)
+        sa1 = self.conv(indicator_state_dim, immediate_state_dim)
         sa1 = torch.cat([sa1, action], 1)
         q1 = F.relu(self.l1(sa1))
         q1 = F.relu(self.l2(q1))
         q1 = self.l3(q1)
 
-        sa2 = self.conv2(indicator_state_dim)
+        sa2 = self.conv2(indicator_state_dim, immediate_state_dim)
         sa2 = torch.cat([sa2, action], 1)
         q2 = F.relu(self.l4(sa2))
         q2 = F.relu(self.l5(q2))
@@ -86,7 +89,7 @@ class Critic(nn.Module):
         return q1, q2
 
     def Q1(self, indicator_state_dim, immediate_state_dim, action):
-        sa = self.conv(indicator_state_dim)
+        sa = self.conv(indicator_state_dim, immediate_state_dim)
         sa = torch.cat([sa, action], 1)
         q1 = F.relu(self.l1(sa))
         q1 = F.relu(self.l2(q1))
@@ -107,11 +110,11 @@ class TD3(object):
         policy_freq=2,
     ):
         indicator_state_dim, immediate_state_dim = state_dim
-        self.actor = Actor(indicator_state_dim[0], indicator_state_dim[1], immediate_state_dim, action_dim, max_action).to(device)
+        self.actor = Actor(indicator_state_dim[0], indicator_state_dim[1], immediate_state_dim[0], action_dim, max_action).to(device)
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
 
-        self.critic = Critic(indicator_state_dim[0], indicator_state_dim[1], immediate_state_dim, action_dim).to(device)
+        self.critic = Critic(indicator_state_dim[0], indicator_state_dim[1], immediate_state_dim[0], action_dim).to(device)
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
 

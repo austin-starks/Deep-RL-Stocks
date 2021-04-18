@@ -35,6 +35,7 @@ class StockEnv(gym.Env):
         starting_amount_lower=10000,
         starting_amount_upper=50000,
         random_start=False,
+        invalid_action_penalty = 5
     ):
         """
         Initializes the environment.
@@ -64,6 +65,7 @@ class StockEnv(gym.Env):
         self.action_space = spaces.Box(
             low=0, high=MAX_LIMIT, shape=(self.number_of_stocks,), dtype=np.int32
         )
+        self.invalid_action_penalty = invalid_action_penalty
 
     def calculate_reward(self, holdings, remaining_money, stock_prices_new, action_is_invalid=False):
         value_last = self.value_at_last_timestep
@@ -73,7 +75,7 @@ class StockEnv(gym.Env):
         )
         self.value_at_last_timestep = r
         if action_is_invalid:
-            r = r - 0 # can penalize invalid actions
+            r = r - self.invalid_action_penalty # can penalize invalid actions
         return r - value_last
 
     def step(self, action):
