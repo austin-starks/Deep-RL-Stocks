@@ -11,11 +11,12 @@ import datetime
 import utility.utils as utils
 import os.path
 
-NUMBER_OF_ITERATIONS = 0
-MAX_LIMIT = 500
+NUMBER_OF_ITERATIONS = 100000
+MAX_LIMIT = 200
 START_TIMESTEPS = 5000
 BATCH_SIZE = 128
-STD_GAUSSIAN_EXPLORATION_NOISE = 0.1
+EPSILON = 0.05
+
 
 
 class StockEnv(gym.Env):
@@ -61,7 +62,7 @@ class StockEnv(gym.Env):
         self.reset(init=True)
 
         self.action_space = spaces.Box(
-            low=0, high=MAX_LIMIT, shape=(self.number_of_stocks,), dtype=np.float32
+            low=0, high=MAX_LIMIT, shape=(self.number_of_stocks,), dtype=np.int32
         )
 
     def calculate_reward(self, holdings, remaining_money, stock_prices_new, action_is_invalid=False):
@@ -215,6 +216,7 @@ class StockEnv(gym.Env):
         self.increment_date()  # needed to be sure we're not on a weekend/holiday
 
 
+
 def run(stock_names, 
         start_date, 
         end_date, 
@@ -240,17 +242,10 @@ def run(stock_names,
             episode_timesteps += 1
 
             # Select action randomly or according to policy
-            if t < START_TIMESTEPS:
+            if t < START_TIMESTEPS or random.random() < EPSILON:
                 action = env.action_space.sample()
             else:
-                action = (
-                    policy.select_action(state.to_numpy())
-                    + np.random.normal(
-                        0,
-                        MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE,
-                        size=env.action_space.shape[0],
-                    )
-                ).clip(0, MAX_LIMIT)
+                action = policy.select_action(state.to_numpy())
                 # action = action.astype(int)
             # Perform action
             next_state, reward, done = env.step(action.flatten())
@@ -258,7 +253,10 @@ def run(stock_names,
                 # utils.log_info(f"Date and Time: {env.get_date_and_time()}")
                 # utils.log_info(f"Current Portfolio Value: {env.calculate_portfolio_value()}")
                 pbar.set_description(f"Date: {env.get_date_and_time()[0]} | Reward: {reward} | Action: {action} | Holdings: {env.get_holdings()}")
-
+            
+            if pbar.n % 200 == 0:
+                policy.save(save_location)
+            
             done_bool = float(done) if episode_timesteps < env.max_epochs else 0
 
             # Store data in replay buffer
@@ -281,8 +279,6 @@ def run(stock_names,
                 episode_reward = 0
                 episode_timesteps = 0
                 episode_num += 1
-                policy.save(save_location)
-
             pbar.update()
     return policy, replay_buffer
     
@@ -298,6 +294,7 @@ def test(stock_names,
         end_date,
         policy,
         replay_buffer,
+        save_location='results/initial_policy'
         ):
     env = StockEnv(stock_names, start_date=start_date, end_date=end_date, random_start=False)
     utils.log_info("Testing policy")
@@ -308,14 +305,8 @@ def test(stock_names,
     
     while not done:
         # print(env.get_date_and_time())
-        action = (policy.select_action(state.to_numpy())
-                        + np.random.normal(
-                            0,
-                            MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE,
-                            size=env.action_space.shape[0],
-                        )
-                    ).clip(0, MAX_LIMIT)
-        print("action", action)
+        action = policy.select_action(state.to_numpy())
+        # print("action", action)
 
         next_state, reward, done = env.step(action.flatten())
         done_bool = float(done)
@@ -324,4 +315,4 @@ def test(stock_names,
         episode_reward += reward
         # policy.train(replay_buffer, BATCH_SIZE)
         df = append_portfolio_value(df, env)            
-    df.to_csv('results/test_results.csv', index_label='Date')
+    df.to_csv(save_location, index_label='Date')

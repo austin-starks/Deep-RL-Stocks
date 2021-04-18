@@ -46,7 +46,8 @@ class State(object):
         # self.past_state.add(self.essential_state)
         self.get_indicators()
         self.indicator_state = self.get_indicator_state(current_date, current_time)
-        self.shape = self.get_state().shape
+        state1, state2 = self.get_state()
+        self.shape = (state1.shape, state2.shape)
       
     
     def get_indicator_state(self, current_date, current_time):
@@ -89,16 +90,10 @@ class State(object):
         new_holdings = []
         invalid_action = False
         for a, holding, price in zip(action, old_holdings, stock_prices):
-            # a can be up to 500
-            # if a is 0 - 200: a = -200 - -0
-            # if a is 200 - 300: a is 0
-            # if a is 300 - 500: a = a - 100
-            if a < 200:
-                a = a - 700
-            elif a < 300:
-                a = 0
+            if a <= 100:
+                a *= -1 
             else:
-                a = a - 100
+                a -= 100
             if current_cash - (a * price) >= 0 and holding + a >= 0:
                 new_holdings.append(max(0, holding + a))
                 current_cash -= a * price
@@ -223,7 +218,7 @@ class State(object):
         # return np.concatenate((past_state, reshaped_indicator_state), 1)
         # print(self.days_in_state)
         # print(self.indicator_state[0: int(0.3 * self.days_in_state)])
-        return reshaped_indicator_state
+        return reshaped_indicator_state, self.essential_state
 
 
 
