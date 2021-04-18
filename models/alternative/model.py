@@ -107,15 +107,16 @@ class TD3(object):
         policy_noise=0.2,
         noise_clip=0.5,
         policy_freq=2,
+        lr=3e-4
     ):
         indicator_state_dim, immediate_state_dim = state_dim
         self.actor = Actor(indicator_state_dim[0], indicator_state_dim[1], immediate_state_dim[0], action_dim, max_action).to(device)
         self.actor_target = copy.deepcopy(self.actor)
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr)
 
         self.critic = Critic(indicator_state_dim[0], indicator_state_dim[1], immediate_state_dim[0], action_dim).to(device)
         self.critic_target = copy.deepcopy(self.critic)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr)
 
         self.max_action = max_action
         self.discount = discount

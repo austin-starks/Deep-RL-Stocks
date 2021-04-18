@@ -2,7 +2,7 @@ from models.alternative.environment import *
 import utility.utils as utils
 import os.path
 
-NUMBER_OF_ITERATIONS = 10000
+NUMBER_OF_ITERATIONS = 50000
 MAX_LIMIT = 1
 START_TIMESTEPS = 5000
 BATCH_SIZE = 128
@@ -16,7 +16,7 @@ def run(stock_names,
         save_location="results/initial_policy"):
     env = StockEnv(stock_names, start_date, end_date, max_limit=MAX_LIMIT, random_start=random_start)
     utils.log_info("Environment Initilized")
-    policy = TD3(env.state.shape, env.action_space.shape[0], max_action=MAX_LIMIT)
+    policy = TD3(env.state.shape, env.action_space.shape[0], max_action=MAX_LIMIT, policy_freq=4, lr=1e-4)
 
     # os.path.exists('initial_policy')
     if os.path.exists(save_location + "_actor"):
@@ -119,7 +119,7 @@ def test(stock_names,
 
 if __name__ == "__main__":
     policy, replay_buffer = run(['SPY'], '01-01-2011', '01-01-2015', save_location="results/experiment3")
-    test(['SPY'], '01-01-2016', '09-30-2018', policy, replay_buffer, save_location="results/test_results_no_trainingcsv")
+    test(['SPY'], '01-01-2016', '09-30-2018', policy, replay_buffer, save_location="results/test_results_50000.csv")
 
 
     
