@@ -26,8 +26,8 @@ class Encoder(nn.Module):
             self.shortcut = nn.Identity()
         else:
             self.shortcut = nn.Conv1d(inchannel, outchannel, kernel_size=1)
-        self.immediate_state_dim = immediate_state_dim
-        self.output = nn.Linear(outchannel * state_length + immediate_state_dim, outchannel)
+        self.immediate_state_dim = 0
+        self.output = nn.Linear(outchannel * state_length + self.immediate_state_dim, outchannel)
     
     def forward(self, X, X_immediate):
         out =  self.layers(X)
@@ -35,7 +35,7 @@ class Encoder(nn.Module):
         out = self.relu(out + shortcut)
         shape = out.shape
         out = out.reshape((shape[0], shape[1] * shape[2]))
-        out = torch.cat([out, X_immediate], 1) 
+        # out = torch.cat([out, X_immediate], 1) 
         out = self.output(out)   
         return out
 
@@ -50,8 +50,8 @@ class Actor(nn.Module):
         self.max_action = max_action
 
 
-    def forward(self, ind_state, imm_state_dim):
-        ind_state = self.conv(ind_state, imm_state_dim)
+    def forward(self, ind_state, imm_state):
+        ind_state = self.conv(ind_state, imm_state)
         a = F.relu(self.l1(ind_state))
         a = F.relu(self.l2(a))
         a = self.max_action * torch.tanh(self.l3(a))

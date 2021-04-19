@@ -7,7 +7,7 @@ class State(object):
     """
     Represents the internal state of an environment
     """
-    def __init__(self, stock_names, starting_money, starting_shares, current_date, current_time, days_in_state=100):
+    def __init__(self, stock_names, starting_money, starting_shares, current_date, current_time, days_in_state=200):
         """
         Initializes the State of the environment
 
@@ -42,8 +42,8 @@ class State(object):
         self.essential_state = np.concatenate([
             starting_money, starting_shares, self.get_stock_prices(current_date, current_time)
         ])
-        self.past_state = PastState(len(self.essential_state), days_in_state)
-        # self.past_state.add(self.essential_state)
+        self.past_state = PastState(len(self.essential_state), days_in_state // 2)
+        self.past_state.add(self.essential_state)
         self.get_indicators()
         self.indicator_state = self.get_indicator_state(current_date, current_time)
         state1, state2 = self.get_state()
@@ -60,14 +60,12 @@ class State(object):
         result = []
         for stock in self.stock_names:
             data = self.dataframes[stock].copy().loc[past_date: current_date]
-
             if current_time == 'Open':
                 # We do not know the High, Low, Close, or indicators of the current date at open 
                 # We must zero them out so the agent is not looking at the future
                 open_price = data.loc[current_date]['Open']
                 data.loc[current_date] = 0
                 data.loc[current_date]['Open'] = open_price
-            # print("data", data)
             data_as_numpy = data.to_numpy()        
             result.append(data_as_numpy)
 
@@ -192,8 +190,8 @@ class State(object):
         self.essential_state = np.concatenate([
             starting_money, starting_shares, self.get_stock_prices(current_date, current_time)
         ])
-        # self.past_state.reset()
-        # self.past_state.add(self.essential_state)
+        self.past_state.reset()
+        self.past_state.add(self.essential_state)
     
     def to_numpy(self):
         """
@@ -211,19 +209,7 @@ class State(object):
         reshaped_indicator_state = self.indicator_state.reshape((length, num_stocks * num_indicators))
         length = len(reshaped_indicator_state)
         reshaped_indicator_state = reshaped_indicator_state[length - int(0.6 * self.days_in_state):length]
-        # past_state = self.past_state.copy()
-        # if past_state.shape[0] < reshaped_indicator_state.shape[0]:
-        #     past_state = np.pad(past_state, ((0,reshaped_indicator_state.shape[0] - past_state.shape[0]), (0,0)))
-        # elif past_state.shape[0] > reshaped_indicator_state.shape[0]:
-        #     reshaped_indicator_state = np.pad(reshaped_indicator_state, ((0,past_state.shape[0] - reshaped_indicator_state.shape[0]), (0,0)))
-        # if past_state.shape[1] < reshaped_indicator_state.shape[1]:
-        #     past_state = np.pad(past_state, ((0,0), (0,reshaped_indicator_state.shape[1] - past_state.shape[1])))
-        # elif past_state.shape[1] > reshaped_indicator_state.shape[1] :
-        #     reshaped_indicator_state = np.pad(reshaped_indicator_state, ((0,0), (0,past_state.shape[1] - reshaped_indicator_state.shape[1])))
-        # return np.concatenate((past_state, reshaped_indicator_state), 1)
-        # print(self.days_in_state)
-        # print(self.indicator_state[0: int(0.3 * self.days_in_state)])
-        return reshaped_indicator_state, self.essential_state
+        return reshaped_indicator_state, self.past_state
 
 
 
