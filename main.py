@@ -16,7 +16,7 @@ def run(stock_names,
         save_location="results/initial_policy"):
     env = StockEnv(stock_names, start_date, end_date, max_limit=MAX_LIMIT, random_start=random_start)
     utils.log_info("Environment Initilized")
-    policy = TD3(env.state.shape, env.action_space.shape[0], max_action=MAX_LIMIT, policy_freq=4, lr=1e-4)
+    policy = TD3(env.state.shape, env.action_space.shape[0], max_action=MAX_LIMIT, policy_freq=2, lr=2e-4)
 
     # os.path.exists('initial_policy')
     if os.path.exists(save_location + "_actor"):

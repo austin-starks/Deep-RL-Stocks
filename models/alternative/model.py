@@ -54,7 +54,8 @@ class Actor(nn.Module):
         ind_state = self.conv(ind_state, imm_state_dim)
         a = F.relu(self.l1(ind_state))
         a = F.relu(self.l2(a))
-        return self.max_action * torch.tanh(self.l3(a))
+        a = self.max_action * torch.tanh(self.l3(a))
+        return a
 
 
 class Critic(nn.Module):

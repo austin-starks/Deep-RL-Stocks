@@ -4,5 +4,3 @@
 /__pycache__
 *.pyc
 *.log
-*_actor*
-*_critic*
