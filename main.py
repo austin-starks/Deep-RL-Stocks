@@ -1,8 +1,11 @@
 from models.alternative.environment import *
 import utility.utils as utils
 import os.path
+from pathlib import Path
+import logging
+import datetime
 
-NUMBER_OF_ITERATIONS = 100000
+NUMBER_OF_ITERATIONS = 50000
 MAX_LIMIT = 1
 START_TIMESTEPS = 5000
 BATCH_SIZE = 128
@@ -47,13 +50,13 @@ def run(stock_names,
                 # action = action.astype(int)
             # Perform action
             next_state, reward, done = env.step(action.flatten())
-            if pbar.n % 50 == 0:
+            if pbar.n % 10 == 0:
                 # utils.log_info(f"Date and Time: {env.get_date_and_time()}")
                 # utils.log_info(f"Current Portfolio Value: {env.calculate_portfolio_value()}")
                 pbar.set_description(f"Date: {env.get_date_and_time()[0]} | Reward: {reward} | Action: {action} | Holdings: {env.get_holdings()}")
             
-            if pbar.n % 200 == 0:
-                policy.save(save_location)
+            # if pbar.n % 200 == 0:
+            #     policy.save(save_location)
             
             done_bool = float(done) if episode_timesteps < env.max_epochs else 0
 
@@ -74,6 +77,9 @@ def run(stock_names,
                 # )
                 # Reset environment
                 state, done = env.reset(), False
+                utils.log_info("episode_reward", episode_reward)
+                utils.log_info("reward per timestep", episode_reward / episode_timesteps)
+
                 episode_reward = 0
                 episode_timesteps = 0
                 episode_num += 1
@@ -118,8 +124,16 @@ def test(stock_names,
 
 
 if __name__ == "__main__":
+    path = os.path.dirname(Path(__file__).absolute())
+    format_short = '[%(filename)s:%(lineno)d] %(message)s'
+    logging.basicConfig(
+        filename=f'{path}/logs/{str(datetime.datetime.now())}.log',
+        format=format_short,
+        datefmt='%Y-%m-%d:%H:%M:%S',
+        level=logging.INFO,
+        filemode="w")
     policy, replay_buffer = run(['SPY'], '01-01-2011', '01-01-2015', save_location="results/experiment3")
-    test(['SPY'], '01-01-2016', '09-30-2018', policy, replay_buffer, save_location="results/test_results_50000.csv")
+    test(['SPY'], '01-01-2016', '09-30-2018', policy, replay_buffer, save_location="results/test_results_0.csv")
 
 
     

@@ -1,3 +1,4 @@
+
 import copy
 import numpy as np
 import torch
@@ -26,8 +27,7 @@ class Encoder(nn.Module):
             self.shortcut = nn.Identity()
         else:
             self.shortcut = nn.Conv1d(inchannel, outchannel, kernel_size=1)
-        self.immediate_state_dim = 0
-        self.output = nn.Linear(outchannel * state_length + self.immediate_state_dim, outchannel)
+        self.output = nn.Linear(outchannel * state_length, outchannel)
     
     def forward(self, X, X_immediate):
         out =  self.layers(X)
@@ -35,7 +35,6 @@ class Encoder(nn.Module):
         out = self.relu(out + shortcut)
         shape = out.shape
         out = out.reshape((shape[0], shape[1] * shape[2]))
-        # out = torch.cat([out, X_immediate], 1) 
         out = self.output(out)   
         return out
 

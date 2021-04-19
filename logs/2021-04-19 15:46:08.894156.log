@@ -1,0 +1,13 @@
+[utils.py:12] Environment Initilized
+[utils.py:12] ('episode_reward', 39609.64244858493)
+[utils.py:12] ('reward per timestep', 21.227032394740046)
+[utils.py:12] ('episode_reward', 42111.77264602089)
+[utils.py:12] ('reward per timestep', 22.10591739948603)
+[utils.py:12] ('episode_reward', 60588.04302495285)
+[utils.py:12] ('reward per timestep', 30.661965093599623)
+[utils.py:12] ('episode_reward', 40636.740005493164)
+[utils.py:12] ('reward per timestep', 21.13195008085968)
+[utils.py:12] ('episode_reward', 38795.29992675781)
+[utils.py:12] ('reward per timestep', 20.98177389224327)
+[utils.py:12] ('episode_reward', 24347.04301939966)
+[utils.py:12] ('reward per timestep', 12.340113035681531)
