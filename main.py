@@ -2,7 +2,7 @@ from models.alternative.environment import *
 import utility.utils as utils
 import os.path
 
-NUMBER_OF_ITERATIONS = 50000
+NUMBER_OF_ITERATIONS = 100000
 MAX_LIMIT = 1
 START_TIMESTEPS = 5000
 BATCH_SIZE = 128
