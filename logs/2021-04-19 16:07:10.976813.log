@@ -1,7 +1,0 @@
-[utils.py:12] Environment Initilized
-[utils.py:12] ('episode_reward', 43091.74275590846)
-[utils.py:12] ('reward per timestep', 21.46003125294246)
-[utils.py:12] ('episode_reward', 49825.75727575847)
-[utils.py:12] ('reward per timestep', 25.202709800585975)
-[utils.py:12] ('episode_reward', 26426.75309479266)
-[utils.py:12] ('reward per timestep', 13.938160914975033)
