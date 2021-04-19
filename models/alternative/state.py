@@ -60,12 +60,14 @@ class State(object):
         result = []
         for stock in self.stock_names:
             data = self.dataframes[stock].copy().loc[past_date: current_date]
+
             if current_time == 'Open':
                 # We do not know the High, Low, Close, or indicators of the current date at open 
                 # We must zero them out so the agent is not looking at the future
                 open_price = data.loc[current_date]['Open']
                 data.loc[current_date] = 0
                 data.loc[current_date]['Open'] = open_price
+            # print("data", data)
             data_as_numpy = data.to_numpy()        
             result.append(data_as_numpy)
 
@@ -180,6 +182,7 @@ class State(object):
             rsi = 100 - 100/(1+rs)
             df['rsi'] = rsi
             self.dataframes[stock] = self.dataframes[stock].dropna()
+        
 
     
     def reset(self, starting_money, starting_shares, current_date, current_time):
@@ -206,7 +209,8 @@ class State(object):
         """
         num_stocks, length, num_indicators = self.indicator_state.shape
         reshaped_indicator_state = self.indicator_state.reshape((length, num_stocks * num_indicators))
-        reshaped_indicator_state = reshaped_indicator_state[0:int(0.6 * self.days_in_state)]
+        length = len(reshaped_indicator_state)
+        reshaped_indicator_state = reshaped_indicator_state[length - int(0.6 * self.days_in_state):length]
         # past_state = self.past_state.copy()
         # if past_state.shape[0] < reshaped_indicator_state.shape[0]:
         #     past_state = np.pad(past_state, ((0,reshaped_indicator_state.shape[0] - past_state.shape[0]), (0,0)))

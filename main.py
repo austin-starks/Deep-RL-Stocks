@@ -52,8 +52,8 @@ def run(stock_names,
                 # utils.log_info(f"Current Portfolio Value: {env.calculate_portfolio_value()}")
                 pbar.set_description(f"Date: {env.get_date_and_time()[0]} | Reward: {reward} | Action: {action} | Holdings: {env.get_holdings()}")
             
-            if pbar.n % 200 == 0:
-                policy.save(save_location)
+            # if pbar.n % 200 == 0:
+            #     policy.save(save_location)
             
             done_bool = float(done) if episode_timesteps < env.max_epochs else 0
 
