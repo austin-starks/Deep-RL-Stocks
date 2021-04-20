@@ -11,14 +11,16 @@ MAX_LIMIT = 1
 START_TIMESTEPS = 5000
 BATCH_SIZE = 64
 STD_GAUSSIAN_EXPLORATION_NOISE = 0.1
-EPSILON = 0.2
-EPSILON_DECR = 0.01
+EPSILON = 0.25
+EPSILON_DECR = 0.0002
 EPSILON_LOW = 0.01
 
 def is_greedy(t):
     global EPSILON
-    result = random.random() <= EPSILON
+    random_num= random.random() 
+    result = random_num > EPSILON
     EPSILON = max(EPSILON_LOW, EPSILON - EPSILON_DECR)
+    return result
 
 
 def select_action(env, state, policy, t):
@@ -32,6 +34,8 @@ def select_action(env, state, policy, t):
                     size=env.action_space.shape[0],
                 )
             ).clip(-MAX_LIMIT, MAX_LIMIT)
+        # if t % 20 == 0:
+        #     utils.log_info("Policy action", action)
                 # action = action.astype(int)
     return action
 
@@ -119,11 +123,11 @@ def test(stock_names,
     episode_reward = 0
     df = pd.DataFrame(columns=['Portfolio Value'])
     df = append_portfolio_value(df, env)
-    
+    utils.log_info("Testing...")
     while not done:
         # print(env.get_date_and_time())
         action = policy.select_action(state.to_numpy())
-        # print("action", action)
+        utils.log_info("action", action)
 
         next_state, reward, done = env.step(action.flatten())
         done_bool = float(done)
@@ -139,14 +143,15 @@ def test(stock_names,
 if __name__ == "__main__":
     path = os.path.dirname(Path(__file__).absolute())
     format_short = '[%(filename)s:%(lineno)d] %(message)s'
+    format_long = '%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s'
     logging.basicConfig(
         filename=f'{path}/logs/{str(datetime.datetime.now())}.log',
-        format=format_short,
+        format=format_long,
         datefmt='%Y-%m-%d:%H:%M:%S',
         level=logging.INFO,
         filemode="w")
-    policy, replay_buffer = run(['SPY'], '01-01-2011', '01-01-2015', save_location="results/experiment5")
-    test(['SPY'], '01-01-2016', '09-30-2018', policy, replay_buffer, save_location="results/test_results_50000.csv")
+    policy, replay_buffer = run(['SPY'], '01-01-2011', '01-01-2015', save_location="results/experiment5", random_start=False)
+    test(['SPY'], '01-01-2016', '09-30-2018', policy, replay_buffer, save_location=f"results/test_results_{NUMBER_OF_ITERATIONS}.csv")
 
 
     

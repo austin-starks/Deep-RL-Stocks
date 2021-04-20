@@ -60,15 +60,18 @@ class StockEnv(gym.Env):
         self.invalid_action_penalty = invalid_action_penalty
 
     def calculate_reward(self, holdings, remaining_money, stock_prices_new, action_is_invalid=False):
+        buy_hold_comparison = (self.state.buy_hold_comparison * stock_prices_new).sum()
+        buy_hold_last = self.buy_hold_last
         value_last = self.value_at_last_timestep
         r = (
             remaining_money
             + np.sum(holdings * (stock_prices_new))
         )
         self.value_at_last_timestep = r
+        self.buy_hold_last = buy_hold_comparison
         if action_is_invalid:
             r = r - self.invalid_action_penalty # can penalize invalid actions
-        return r - value_last
+        return (r - value_last )- (buy_hold_comparison - buy_hold_last)
 
     def step(self, action):
         """
@@ -144,6 +147,7 @@ class StockEnv(gym.Env):
         else:
             self.state.reset(starting_money, starting_shares, current_date, current_time)
         self.starting_amount = self.state.calculate_portfolio_value()
+        self.buy_hold_last = self.state.buy_hold_comparison
         return self.state
 
     

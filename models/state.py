@@ -43,8 +43,9 @@ class State(object):
                 self.dataframes[stock_name] = pd.read_csv(filename, index_col="Date")
             except:
                 raise AssertionError(stock_name + " is not a stock or ETF.")
+        stock_prices = self.get_stock_prices(current_date, current_time)
         self.essential_state = np.concatenate([
-            starting_money, starting_shares, self.get_stock_prices(current_date, current_time)
+            starting_money, starting_shares, stock_prices
         ])
         self.past_state = PastState(len(self.essential_state), days_in_state)
         self.past_state.add(self.essential_state)
@@ -52,6 +53,7 @@ class State(object):
         self.indicator_state = self.get_indicator_state(current_date, current_time)
         state1, state2 = self.get_state()
         self.shape = (state1.shape, state2.shape)
+        self.buy_hold_comparison = self.calculate_portfolio_value() / self.number_of_stocks / stock_prices
       
     
     def get_indicator_state(self, current_date, current_time):
@@ -194,9 +196,11 @@ class State(object):
         """
         Resets the state with the new parameters
         """
+        stock_prices = self.get_stock_prices(current_date, current_time)
         self.essential_state = np.concatenate([
-            starting_money, starting_shares, self.get_stock_prices(current_date, current_time)
+            starting_money, starting_shares, stock_prices
         ])
+        self.buy_hold_comparison = self.calculate_portfolio_value() / self.number_of_stocks / stock_prices
         self.past_state.reset()
         self.past_state.add(self.essential_state)
     
