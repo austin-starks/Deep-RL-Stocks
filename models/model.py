@@ -12,9 +12,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Implementation of Twin Delayed Deep Deterministic Policy Gradients (TD3)
 # Paper: https://arxiv.org/abs/1802.09477
 # Original Implementation found on https://github.com/sfujim/TD3/blob/master/TD3.py
-class Encoder(nn.Module):
+class CNN(nn.Module):
     def __init__(self, indicator_state_dim, immediate_state_dim, hidden_size, outchannel, activation=nn.ReLU):
-        super(Encoder, self).__init__()
+        super(CNN, self).__init__()
         self.layers = nn.Sequential(
             nn.Conv1d(indicator_state_dim[1], hidden_size, kernel_size=3, padding=1),
             nn.BatchNorm1d(hidden_size),
@@ -27,6 +27,7 @@ class Encoder(nn.Module):
             self.shortcut = nn.Identity()
         else:
             self.shortcut = nn.Conv1d(indicator_state_dim[1], outchannel, kernel_size=1)
+        
         self.output = nn.Linear(outchannel * indicator_state_dim[0], outchannel)
     
     def forward(self, X, X_immediate):
@@ -41,7 +42,47 @@ class Encoder(nn.Module):
 class Actor(nn.Module):
     def __init__(self, ind_state_dim, imm_state_dim, action_dim, max_action):
         super(Actor, self).__init__()
-        self.conv = Encoder(ind_state_dim, imm_state_dim, 64, 64)
+        self.conv = CNN(ind_state_dim, imm_state_dim, 64, 64)
+        self.l1 = nn.Linear(64 , 64)
+        self.l2 = nn.Linear(64, 64)
+        self.l3 = nn.Linear(64, action_dim)
+
+        self.max_action = max_action
+
+
+    def forward(self, ind_state, imm_state):
+        ind_state = self.conv(ind_state, imm_state)
+        a = F.relu(self.l1(ind_state))
+        a = F.relu(self.l2(a))
+        a = self.max_action * torch.tanh(self.l3(a))
+        return a
+
+class RNN(nn.Module):
+    def __init__(self, indicator_state_dim, immediate_state_dim, hidden_size, outchannel, activation=nn.ReLU):
+        super(RNN, self).__init__()
+        
+        self.lstm1 = nn.LSTM(indicator_state_dim[0], hidden_size, num_layers=2, batch_first=True, bidirectional=True, dropout=0.35)
+        self.lstm2 = nn.LSTM(immediate_state_dim[0], hidden_size, num_layers=2, batch_first=True, bidirectional=True, dropout=0.35)
+        self.output = nn.Linear(2 * hidden_size * indicator_state_dim[1] + 2 * hidden_size * immediate_state_dim[1], outchannel)
+    
+    def forward(self, X, X_immediate):
+        out = self.lstm1(X.permute(0,2,1))[0].permute(0,2,1)
+        out2 = self.lstm2(X_immediate.permute(0,2,1))[0].permute(0,2,1)
+   
+        shape = out.shape
+        out = out.reshape((shape[0], shape[1] * shape[2]))
+        
+        shape2 = out2.shape 
+        out2 = out2.reshape((shape2[0], shape2[1] * shape2[2]))
+
+        concat = self.output(torch.cat((out, out2), 1))   
+        return concat
+
+
+class Actor(nn.Module):
+    def __init__(self, ind_state_dim, imm_state_dim, action_dim, max_action):
+        super(Actor, self).__init__()
+        self.conv = CNN(ind_state_dim, imm_state_dim, 64, 64)
         self.l1 = nn.Linear(64 , 64)
         self.l2 = nn.Linear(64, 64)
         self.l3 = nn.Linear(64, action_dim)
@@ -62,25 +103,25 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
 
         # Q1 architecture
-        self.conv = Encoder(indicator_state_dim, immediate_state_dim, 64, 64)
+        self.rnn = RNN(indicator_state_dim, immediate_state_dim, 64, 64)
         self.l1 = nn.Linear(64 + action_dim, 64)
         self.l2 = nn.Linear(64, 64)
         self.l3 = nn.Linear(64, 1)
 
         # Q2 architecture
-        self.conv2 = Encoder(indicator_state_dim, immediate_state_dim, 64, 64)
+        self.rnn2 = RNN(indicator_state_dim, immediate_state_dim, 64, 64)
         self.l4 = nn.Linear(64 + action_dim, 64)
         self.l5 = nn.Linear(64, 64)
         self.l6 = nn.Linear(64, 1)
 
     def forward(self, indicator_state, immediate_state, action):
-        sa1 = self.conv(indicator_state, immediate_state)
+        sa1 = self.rnn(indicator_state, immediate_state)
         sa1 = torch.cat([sa1, action], 1)
         q1 = F.relu(self.l1(sa1))
         q1 = F.relu(self.l2(q1))
         q1 = self.l3(q1)
 
-        sa2 = self.conv2(indicator_state, immediate_state)
+        sa2 = self.rnn2(indicator_state, immediate_state)
         sa2 = torch.cat([sa2, action], 1)
         q2 = F.relu(self.l4(sa2))
         q2 = F.relu(self.l5(q2))
@@ -88,7 +129,7 @@ class Critic(nn.Module):
         return q1, q2
 
     def Q1(self, indicator_state_dim, immediate_state, action):
-        sa = self.conv(indicator_state_dim, immediate_state)
+        sa = self.rnn(indicator_state_dim, immediate_state)
         sa = torch.cat([sa, action], 1)
         q1 = F.relu(self.l1(sa))
         q1 = F.relu(self.l2(q1))
@@ -114,9 +155,10 @@ class TD3(object):
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr)
 
-        self.critic = Critic(indicator_state_dim, immediate_state_dim[0], action_dim).to(device)
+        self.critic = Critic(indicator_state_dim, immediate_state_dim, action_dim).to(device)
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr)
+        self.critic_loss = torch.nn.SmoothL1Loss()
 
         self.max_action = max_action
         self.discount = discount
@@ -163,7 +205,7 @@ class TD3(object):
         current_Q1, current_Q2 = self.critic(next_ind_state, next_imm_state, action)
 
         # Compute critic loss
-        critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(
+        critic_loss = self.critic_loss(current_Q1, target_Q) + F.mse_loss(
             current_Q2, target_Q
         )
 
@@ -228,11 +270,15 @@ class ReplayBuffer(object):
             full_indicator_state = [max_size] + [indicator_state]
         else:
             full_indicator_state = [max_size] + [s for s in indicator_state]
+        if type(immediate_state) == int:
+            full_immediate_state = [max_size] + [immediate_state]
+        else:
+            full_immediate_state = [max_size] + [s for s in immediate_state]
         self.action = np.zeros((max_size, action_dim))
         self.indicator_state = np.zeros(full_indicator_state)
-        self.immediate_state = np.zeros((max_size, immediate_state[0]))
+        self.immediate_state = np.zeros(full_immediate_state)
         self.next_indicator_state = np.zeros(full_indicator_state)
-        self.next_immediate_state = np.zeros((max_size, immediate_state[0]))
+        self.next_immediate_state = np.zeros(full_immediate_state)
         self.reward = np.zeros((max_size, 1))
         self.not_done = np.zeros((max_size, 1))
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

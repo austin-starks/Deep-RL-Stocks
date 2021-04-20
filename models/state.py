@@ -47,7 +47,7 @@ class State(object):
             starting_money, starting_shares, self.get_stock_prices(current_date, current_time)
         ])
         self.past_state = PastState(len(self.essential_state), days_in_state)
-        # self.past_state.add(self.essential_state)
+        self.past_state.add(self.essential_state)
         self.get_indicators()
         self.indicator_state = self.get_indicator_state(current_date, current_time)
         state1, state2 = self.get_state()
@@ -134,8 +134,8 @@ class State(object):
         Parameter current_date (string): The date of the new state
         Parameter current_time (string): The time of the new state
         """
-        # if current_time == 'Close':
-        #     self.past_state.add(self.essential_state)
+        if current_time == 'Close':
+            self.past_state.add(self.essential_state)
         stock_prices = self.get_stock_prices(current_date, current_time)
         self.essential_state = np.concatenate([
             np.array([remaining_money]), holdings, stock_prices
@@ -197,8 +197,8 @@ class State(object):
         self.essential_state = np.concatenate([
             starting_money, starting_shares, self.get_stock_prices(current_date, current_time)
         ])
-        # self.past_state.reset()
-        # self.past_state.add(self.essential_state)
+        self.past_state.reset()
+        self.past_state.add(self.essential_state)
     
     def to_numpy(self):
         """
@@ -217,7 +217,7 @@ class State(object):
         reshaped_indicator_state = self.indicator_state.reshape((length, num_stocks * num_indicators))
         length = len(reshaped_indicator_state)
         reshaped_indicator_state = reshaped_indicator_state[length - int(0.6 * self.days_in_state):length]
-        return reshaped_indicator_state, self.essential_state
+        return reshaped_indicator_state, self.past_state
 
 
 

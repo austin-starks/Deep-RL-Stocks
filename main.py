@@ -4,13 +4,36 @@ import os.path
 from pathlib import Path
 import logging
 import datetime
+import random
 
 NUMBER_OF_ITERATIONS = 50000
 MAX_LIMIT = 1
 START_TIMESTEPS = 5000
-BATCH_SIZE = 128
-STD_GAUSSIAN_EXPLORATION_NOISE = 0.2
+BATCH_SIZE = 64
+STD_GAUSSIAN_EXPLORATION_NOISE = 0.1
+EPSILON = 0.2
+EPSILON_DECR = 0.01
+EPSILON_LOW = 0.01
 
+def is_greedy(t):
+    global EPSILON
+    result = random.random() <= EPSILON
+    EPSILON = max(EPSILON_LOW, EPSILON - EPSILON_DECR)
+
+
+def select_action(env, state, policy, t):
+    if t < START_TIMESTEPS or not is_greedy(t):
+        action = env.action_space.sample()
+    else:
+        action = (policy.select_action(state.to_numpy())
+                + np.random.normal(
+                    0,
+                    MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE,
+                    size=env.action_space.shape[0],
+                )
+            ).clip(-MAX_LIMIT, MAX_LIMIT)
+                # action = action.astype(int)
+    return action
 
 def run(stock_names, 
         start_date, 
@@ -37,17 +60,7 @@ def run(stock_names,
             episode_timesteps += 1
 
             # Select action randomly or according to policy
-            if t < START_TIMESTEPS:
-                action = env.action_space.sample()
-            else:
-                action = (policy.select_action(state.to_numpy())
-                        + np.random.normal(
-                            0,
-                            MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE,
-                            size=env.action_space.shape[0],
-                        )
-                    ).clip(-MAX_LIMIT, MAX_LIMIT)
-                # action = action.astype(int)
+            action = select_action(env, state, policy, t)
             # Perform action
             next_state, reward, done = env.step(action.flatten())
             if pbar.n % 10 == 0:
@@ -55,8 +68,8 @@ def run(stock_names,
                 # utils.log_info(f"Current Portfolio Value: {env.calculate_portfolio_value()}")
                 pbar.set_description(f"Date: {env.get_date_and_time()[0]} | Reward: {reward} | Action: {action} | Holdings: {env.get_holdings()}")
             
-            # if pbar.n % 200 == 0:
-            #     policy.save(save_location)
+            if pbar.n % 200 == 0:
+                policy.save(save_location)
             
             done_bool = float(done) if episode_timesteps < env.max_epochs else 0
 
@@ -132,8 +145,8 @@ if __name__ == "__main__":
         datefmt='%Y-%m-%d:%H:%M:%S',
         level=logging.INFO,
         filemode="w")
-    policy, replay_buffer = run(['SPY'], '01-01-2011', '01-01-2015', save_location="results/experiment3")
-    test(['SPY'], '01-01-2016', '09-30-2018', policy, replay_buffer, save_location="results/test_results_0.csv")
+    policy, replay_buffer = run(['SPY'], '01-01-2011', '01-01-2015', save_location="results/experiment5")
+    test(['SPY'], '01-01-2016', '09-30-2018', policy, replay_buffer, save_location="results/test_results_50000.csv")
 
 
     
