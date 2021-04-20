@@ -4,8 +4,8 @@ from gym import spaces
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from models.alternative.model import TD3, ReplayBuffer
-from models.alternative.state import State
+from models.model import TD3, ReplayBuffer
+from models.state import State
 import random
 import re
 import datetime

@@ -13,25 +13,25 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Paper: https://arxiv.org/abs/1802.09477
 # Original Implementation found on https://github.com/sfujim/TD3/blob/master/TD3.py
 class Encoder(nn.Module):
-    def __init__(self, inchannel, state_length, immediate_state_dim, hidden_size, outchannel, activation=nn.ReLU):
+    def __init__(self, indicator_state_dim, immediate_state_dim, hidden_size, outchannel, activation=nn.ReLU):
         super(Encoder, self).__init__()
         self.layers = nn.Sequential(
-            nn.Conv1d(inchannel, hidden_size, kernel_size=3, padding=1),
+            nn.Conv1d(indicator_state_dim[1], hidden_size, kernel_size=3, padding=1),
             nn.BatchNorm1d(hidden_size),
             activation(),
             nn.Conv1d(hidden_size, outchannel, kernel_size=3, padding=1),
             nn.BatchNorm1d(outchannel),
         )
         self.relu = activation()
-        if inchannel == outchannel:
+        if indicator_state_dim[1] == outchannel:
             self.shortcut = nn.Identity()
         else:
-            self.shortcut = nn.Conv1d(inchannel, outchannel, kernel_size=1)
-        self.output = nn.Linear(outchannel * state_length, outchannel)
+            self.shortcut = nn.Conv1d(indicator_state_dim[1], outchannel, kernel_size=1)
+        self.output = nn.Linear(outchannel * indicator_state_dim[0], outchannel)
     
     def forward(self, X, X_immediate):
-        out =  self.layers(X)
-        shortcut = self.shortcut(X)
+        out =  self.layers(X.permute(0,2,1)).permute(0,2,1)
+        shortcut = self.shortcut(X.permute(0,2,1)).permute(0,2,1)
         out = self.relu(out + shortcut)
         shape = out.shape
         out = out.reshape((shape[0], shape[1] * shape[2]))
@@ -39,9 +39,9 @@ class Encoder(nn.Module):
         return out
 
 class Actor(nn.Module):
-    def __init__(self, ind_state_dim, ind_state_length, imm_state_dim, action_dim, max_action):
+    def __init__(self, ind_state_dim, imm_state_dim, action_dim, max_action):
         super(Actor, self).__init__()
-        self.conv = Encoder(ind_state_dim, ind_state_length, imm_state_dim, 64, 64)
+        self.conv = Encoder(ind_state_dim, imm_state_dim, 64, 64)
         self.l1 = nn.Linear(64 , 64)
         self.l2 = nn.Linear(64, 64)
         self.l3 = nn.Linear(64, action_dim)
@@ -58,37 +58,37 @@ class Actor(nn.Module):
 
 
 class Critic(nn.Module):
-    def __init__(self, indicator_state_dim, state_length, immediate_state_dim, action_dim):
+    def __init__(self, indicator_state_dim, immediate_state_dim, action_dim):
         super(Critic, self).__init__()
 
         # Q1 architecture
-        self.conv = Encoder(indicator_state_dim, state_length, immediate_state_dim, 64, 64)
+        self.conv = Encoder(indicator_state_dim, immediate_state_dim, 64, 64)
         self.l1 = nn.Linear(64 + action_dim, 64)
         self.l2 = nn.Linear(64, 64)
         self.l3 = nn.Linear(64, 1)
 
         # Q2 architecture
-        self.conv2 = Encoder(indicator_state_dim, state_length, immediate_state_dim, 64, 64)
+        self.conv2 = Encoder(indicator_state_dim, immediate_state_dim, 64, 64)
         self.l4 = nn.Linear(64 + action_dim, 64)
         self.l5 = nn.Linear(64, 64)
         self.l6 = nn.Linear(64, 1)
 
-    def forward(self, indicator_state_dim, immediate_state_dim, action):
-        sa1 = self.conv(indicator_state_dim, immediate_state_dim)
+    def forward(self, indicator_state, immediate_state, action):
+        sa1 = self.conv(indicator_state, immediate_state)
         sa1 = torch.cat([sa1, action], 1)
         q1 = F.relu(self.l1(sa1))
         q1 = F.relu(self.l2(q1))
         q1 = self.l3(q1)
 
-        sa2 = self.conv2(indicator_state_dim, immediate_state_dim)
+        sa2 = self.conv2(indicator_state, immediate_state)
         sa2 = torch.cat([sa2, action], 1)
         q2 = F.relu(self.l4(sa2))
         q2 = F.relu(self.l5(q2))
         q2 = self.l6(q2)
         return q1, q2
 
-    def Q1(self, indicator_state_dim, immediate_state_dim, action):
-        sa = self.conv(indicator_state_dim, immediate_state_dim)
+    def Q1(self, indicator_state_dim, immediate_state, action):
+        sa = self.conv(indicator_state_dim, immediate_state)
         sa = torch.cat([sa, action], 1)
         q1 = F.relu(self.l1(sa))
         q1 = F.relu(self.l2(q1))
@@ -110,11 +110,11 @@ class TD3(object):
         lr=3e-4
     ):
         indicator_state_dim, immediate_state_dim = state_dim
-        self.actor = Actor(indicator_state_dim[0], indicator_state_dim[1], immediate_state_dim[0], action_dim, max_action).to(device)
+        self.actor = Actor(indicator_state_dim, immediate_state_dim[0], action_dim, max_action).to(device)
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr)
 
-        self.critic = Critic(indicator_state_dim[0], indicator_state_dim[1], immediate_state_dim[0], action_dim).to(device)
+        self.critic = Critic(indicator_state_dim, immediate_state_dim[0], action_dim).to(device)
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr)
 

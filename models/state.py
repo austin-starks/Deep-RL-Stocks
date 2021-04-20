@@ -2,6 +2,8 @@
 import pandas as pd
 import numpy as np
 import datetime
+import os.path
+from pathlib import Path
 
 
 class State(object):
@@ -35,7 +37,8 @@ class State(object):
         if type(stock_names) == str:
             stock_names = [stock_names]
         for stock_name in stock_names:
-            filename = f"data/price_data/{stock_name}.csv"
+            path = os.path.dirname(Path(__file__).absolute())
+            filename = f"{path}/../data/price_data/{stock_name}.csv"
             try:
                 self.dataframes[stock_name] = pd.read_csv(filename, index_col="Date")
             except:
@@ -182,7 +185,8 @@ class State(object):
             rs = abs(up_chg_avg/down_chg_avg)
             rsi = 100 - 100/(1+rs)
             df['rsi'] = rsi
-            self.dataframes[stock] = self.dataframes[stock].dropna()
+            self.dataframes[stock] = df.dropna()
+            self.dataframes[stock]
         
 
     
@@ -202,7 +206,8 @@ class State(object):
 
         Alias for self.get_state()
         """
-        return self.get_state()
+        state= self.get_state()
+        return state
 
     def get_state(self):
         """
