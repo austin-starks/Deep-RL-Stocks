@@ -64,7 +64,7 @@ def plot(portfolio):
 
 
 if __name__ == "__main__":
-    portfolio = get_data("../results/test_results_100000.csv")
+    portfolio = get_data("../results/test_results_0.csv")
     stock = get_data("../data/price_data/SPY.csv")
     stock = normalize_stock_date(portfolio, stock)
 

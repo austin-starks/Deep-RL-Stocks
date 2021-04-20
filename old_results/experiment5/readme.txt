@@ -4,8 +4,6 @@ Highlights:
     - Critic uses LSTM layers. (Previously attempted Actor uses it too, but WAYY too slow)
     - Epsilon-Greedy Strategy
 
-Results:
-    - Action saturates at -1
 
 
 State: 

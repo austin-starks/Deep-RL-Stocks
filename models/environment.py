@@ -27,7 +27,7 @@ class StockEnv(gym.Env):
         starting_amount_lower=20000,
         starting_amount_upper=50000,
         random_start=False,
-        invalid_action_penalty=5
+        invalid_action_penalty=0
     ):
         """
         Initializes the environment.
