@@ -7,13 +7,13 @@ import datetime
 import random
 
 NUMBER_OF_ITERATIONS = 50000
-MAX_LIMIT = 1
-START_TIMESTEPS = 5000
+MAX_LIMIT = 3
+START_TIMESTEPS = 500
 BATCH_SIZE = 64
 STD_GAUSSIAN_EXPLORATION_NOISE = 0.1
 EPSILON = 0.25
 EPSILON_DECR = 0.0002
-EPSILON_LOW = 0.01
+EPSILON_LOW = 0.025
 
 def is_greedy(t):
     global EPSILON
@@ -30,9 +30,12 @@ def select_action(env, state, policy, t):
                 + np.random.normal(
                     0,
                     MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE,
-                    size=env.action_space.shape[0],
+                    size=(env.action_space.shape),
                 )
-            ).clip(-MAX_LIMIT, MAX_LIMIT)
+            )
+            # .clip(0, MAX_LIMIT)
+        action_sh = action.shape
+        action = action.reshape((action_sh[1], action_sh[2]))
         # if t % 20 == 0:
         #     utils.log_info("Policy action", action)
                 # action = action.astype(int)
@@ -50,7 +53,7 @@ def run(stock_names,
     # if os.path.exists(save_location + "_actor"):
     #     print("Loaded policy")
     #     policy.load(save_location)
-    replay_buffer = ReplayBuffer(env.state.shape, env.action_space.shape[0])
+    replay_buffer = ReplayBuffer(env.state.shape, env.action_space.shape)
     state, done = env.reset(), False
     episode_reward = 0
     episode_timesteps = 0
@@ -61,11 +64,11 @@ def run(stock_names,
             # Select action randomly or according to policy
             action = select_action(env, state, policy, t)
             # Perform action
-            next_state, reward, done = env.step(action.flatten())
+            next_state, reward, done = env.step(action)
             if pbar.n % 10 == 0:
                 # utils.log_info(f"Date and Time: {env.get_date_and_time()}")
                 # utils.log_info(f"Current Portfolio Value: {env.calculate_portfolio_value()}")
-                pbar.set_description(f"Date: {env.get_date_and_time()[0]} | Reward: {reward} | Action: {action} | Holdings: {env.get_holdings()}")
+                pbar.set_description(f"{env.get_date_and_time()[0]} | R: {reward} | A: {action.argmax(-1)} | H: {env.get_holdings()}")
             if pbar.n % 200 == 0:
                 policy.save(save_location)
             done_bool = float(done) if episode_timesteps < env.max_epochs else 0
@@ -116,7 +119,7 @@ def test(stock_names,
         # print(env.get_date_and_time())
         action = policy.select_action(state.to_numpy())
         utils.log_info("action", action)
-        next_state, reward, done = env.step(action.flatten())
+        next_state, reward, done = env.step(action)
         done_bool = float(done)
         # replay_buffer.add(state.to_numpy(), action, next_state.to_numpy(), reward, done_bool)
         state = next_state
@@ -124,7 +127,7 @@ def test(stock_names,
         # policy.train(replay_buffer, BATCH_SIZE)
         df = append_portfolio_value(df, env)
     df.to_csv(save_location, index_label='Date')
-    
+
 if __name__ == "__main__":
     path = os.path.dirname(Path(__file__).absolute())
     format_short = '[%(filename)s:%(lineno)d] %(message)s'

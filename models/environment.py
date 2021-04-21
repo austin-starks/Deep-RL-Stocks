@@ -48,7 +48,7 @@ class StockEnv(gym.Env):
         self.starting_amount = self.starting_amount_upper
         self.reset(init=True)
         self.action_space = spaces.Box(
-            low=-max_limit, high=max_limit, shape=(self.number_of_stocks,), dtype=np.float32
+            low=0, high=1, shape=(self.number_of_stocks, max_limit), dtype=np.float32
         )
         self.invalid_action_penalty = invalid_action_penalty
 

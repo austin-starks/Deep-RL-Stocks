@@ -42,14 +42,19 @@ class Actor(nn.Module):
         self.conv = CNN(ind_state_dim, imm_state_dim, 64, 64)
         self.l1 = nn.Linear(64 , 64)
         self.l2 = nn.Linear(64, 64)
-        self.l3 = nn.Linear(64, action_dim)
+        self.l3 = nn.Linear(64, action_dim * max_action)
+        self.softmax = nn.Softmax(dim=-1)
+
+        self.action_dim = action_dim
         self.max_action = max_action
 
     def forward(self, ind_state, imm_state):
         ind_state = self.conv(ind_state, imm_state)
         a = F.relu(self.l1(ind_state))
         a = F.relu(self.l2(a))
-        a = self.max_action * torch.tanh(self.l3(a))
+        a = self.l3(a)
+        a = a.reshape((a.shape[0], self.action_dim, -1))
+        a = self.softmax(a)
         return a
 
 class RNN(nn.Module):
@@ -57,7 +62,8 @@ class RNN(nn.Module):
         super(RNN, self).__init__()
         self.lstm1 = nn.LSTM(indicator_state_dim[0], hidden_size, num_layers=5, batch_first=True)
         self.lstm2 = nn.LSTM(immediate_state_dim[0], hidden_size, num_layers=5, batch_first=True)
-        self.output = nn.Linear(hidden_size * indicator_state_dim[1] + 2 * hidden_size * immediate_state_dim[1], outchannel)
+        self.output = nn.Linear(hidden_size * indicator_state_dim[1] +  hidden_size * immediate_state_dim[1], outchannel)
+        
     def forward(self, X, X_immediate):
         out = self.lstm1(X.permute(0,2,1))[0].permute(0,2,1)
         out2 = self.lstm2(X_immediate.permute(0,2,1))[0].permute(0,2,1)
@@ -69,21 +75,23 @@ class RNN(nn.Module):
         return concat
 
 class Critic(nn.Module):
-    def __init__(self, indicator_state_dim, immediate_state_dim, action_dim):
+    def __init__(self, indicator_state_dim, immediate_state_dim, action_dim, max_action):
         super(Critic, self).__init__()
         # Q1 architecture
         self.rnn = RNN(indicator_state_dim, immediate_state_dim, 64, 64)
-        self.l1 = nn.Linear(64 + action_dim, 64)
+        self.l1 = nn.Linear(64 + (action_dim * max_action), 64)
         self.l2 = nn.Linear(64, 64)
         self.l3 = nn.Linear(64, 1)
         # Q2 architecture
         self.rnn2 = RNN(indicator_state_dim, immediate_state_dim, 64, 64)
-        self.l4 = nn.Linear(64 + action_dim, 64)
+        self.l4 = nn.Linear(64 + (action_dim * max_action), 64)
         self.l5 = nn.Linear(64, 64)
         self.l6 = nn.Linear(64, 1)
 
     def forward(self, indicator_state, immediate_state, action):
         sa1 = self.rnn(indicator_state, immediate_state)
+        act_sh = action.shape
+        action = action.reshape((act_sh[0], act_sh[1] * act_sh[2]))
         sa1 = torch.cat([sa1, action], 1)
         q1 = F.relu(self.l1(sa1))
         q1 = F.relu(self.l2(q1))
@@ -96,6 +104,8 @@ class Critic(nn.Module):
         return q1, q2
 
     def Q1(self, indicator_state_dim, immediate_state, action):
+        act_sh = action.shape
+        action = action.reshape((act_sh[0], act_sh[1] * act_sh[2]))
         sa = self.rnn(indicator_state_dim, immediate_state)
         sa = torch.cat([sa, action], 1)
         q1 = F.relu(self.l1(sa))
@@ -120,7 +130,7 @@ class TD3(object):
         self.actor = Actor(indicator_state_dim, immediate_state_dim[0], action_dim, max_action).to(device)
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr)
-        self.critic = Critic(indicator_state_dim, immediate_state_dim, action_dim).to(device)
+        self.critic = Critic(indicator_state_dim, immediate_state_dim, action_dim, max_action).to(device)
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr)
         self.critic_loss = torch.nn.SmoothL1Loss()
@@ -152,9 +162,10 @@ class TD3(object):
             noise = (torch.randn_like(action) * self.policy_noise).clamp(
                 -self.noise_clip, self.noise_clip
             )
-            next_action = (self.actor_target(next_ind_state, next_imm_state) + noise).clamp(
-                -self.max_action, self.max_action
-            )
+            next_action = (self.actor_target(next_ind_state, next_imm_state) + noise)
+            # .clamp(
+            #     -self.max_action, self.max_action
+            # )
             # Compute the target Q value
             target_Q1, target_Q2 = self.critic_target(next_ind_state, next_imm_state, next_action)
             target_Q = torch.min(target_Q1, target_Q2)
@@ -222,7 +233,11 @@ class ReplayBuffer(object):
             full_immediate_state = [max_size] + [immediate_state]
         else:
             full_immediate_state = [max_size] + [s for s in immediate_state]
-        self.action = np.zeros((max_size, action_dim))
+        if type(action_dim) == int:
+            full_action_dim = [max_size] + [action_dim]
+        else:
+            full_action_dim = [max_size] + [a for a in action_dim]
+        self.action = np.zeros(full_action_dim)
         self.indicator_state = np.zeros(full_indicator_state)
         self.immediate_state = np.zeros(full_immediate_state)
         self.next_indicator_state = np.zeros(full_indicator_state)
@@ -248,7 +263,7 @@ class ReplayBuffer(object):
         self.not_done[self.ptr] = 1. - done
         self.ptr = (self.ptr + 1) % self.max_size
         self.size = min(self.size + 1, self.max_size)
-        
+
     def sample(self, batch_size):
         ind = np.random.randint(0, self.size, size=batch_size)
         return (

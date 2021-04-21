@@ -87,18 +87,32 @@ class State(object):
         current_cash = self.essential_state[0]
         new_holdings = []
         invalid_action = False
+        alotted_cash = current_cash / len(stock_prices)
+        # print()
+        # print("action", action)
+        # print("old-holdings", old_holdings)
+        # print("current_cash", current_cash )
+        # print("state",self.essential_state) 
+
         for a, holding, price in zip(action, old_holdings, stock_prices):
-            if a > 0:
-                cash = a * current_cash / len(old_holdings)
-                shares = cash / price
-                total_price = shares * price
-                current_cash -= total_price
-                new_holdings.append(holding + shares)
-            else:
-                shares = abs(a) * holding
-                total_price = shares * price
-                current_cash += total_price
-                new_holdings.append(holding - shares)
+            action_idx = a.argmax()
+            if action_idx == 0: # sell
+                if holding == 0:
+                    invalid_action = True 
+                else:
+                    cash = holding * price 
+                    # print('cashback', cash)
+                    current_cash += cash 
+                    holding = 0
+            elif action_idx == 2: #buy
+                # print('alotted cash', alotted_cash)
+                if alotted_cash <= 1:
+                    invalid_action = True 
+                else:
+                    current_cash -= alotted_cash 
+                    holding = alotted_cash / price
+            new_holdings.append(holding)
+        # print("new_holdings", new_holdings)
         return np.array(new_holdings), current_cash, invalid_action
 
     def get_holdings(self):
@@ -197,7 +211,7 @@ class State(object):
         reshaped_indicator_state = self.indicator_state.reshape((length, num_stocks * num_indicators))
         length = len(reshaped_indicator_state)
         reshaped_indicator_state = reshaped_indicator_state[length - int(0.6 * self.days_in_state):length]
-        return reshaped_indicator_state, self.past_state
+        return reshaped_indicator_state, self.past_state.data
 
 class PastState(object):
     """
