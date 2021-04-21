@@ -1,4 +1,3 @@
-
 import gym
 from gym import spaces
 import pandas as pd
@@ -10,14 +9,13 @@ import random
 import re
 import datetime
 
-
 class StockEnv(gym.Env):
     """
     The current environment of the agent.
-
-    The environment keeps track of where the agent is after taking action a in 
+    The environment keeps track of where the agent is after taking action a in
     state s.
     """
+
     def __init__(
         self,
         stock_names,
@@ -31,21 +29,17 @@ class StockEnv(gym.Env):
     ):
         """
         Initializes the environment.
-        
         Parameter stock_names: the name of the stocks for this environment.
         Precondition: stock_names must be an array of stocks or ETFs
-
         Parameter start_date: the starting date of this environment.
         Precondition: start_date must be a string in this format: YYYY-DD-MM
-
         Parameter end_date: the ending date of this environment.
-        Precondition: end_date must be a string in this format: YYYY-DD-MM and 
+        Precondition: end_date must be a string in this format: YYYY-DD-MM and
                     end_date must be after start_date
         """
         super(StockEnv, self).__init__()
         self.random_start = random_start
         self.valid_dates = pd.read_csv("data/price_data/SPY.csv", index_col="Date").index
-        
         self.number_of_stocks = len(stock_names)
         self.stock_names = stock_names
         self.initialize_date(start_date, end_date), "Date preconditions failed"
@@ -53,36 +47,33 @@ class StockEnv(gym.Env):
         self.starting_amount_upper = starting_amount_upper
         self.starting_amount = self.starting_amount_upper
         self.reset(init=True)
-
         self.action_space = spaces.Box(
             low=-max_limit, high=max_limit, shape=(self.number_of_stocks,), dtype=np.float32
         )
         self.invalid_action_penalty = invalid_action_penalty
 
     def calculate_reward(self, holdings, remaining_money, stock_prices_new, action_is_invalid=False):
-        buy_hold_comparison = (self.state.buy_hold_comparison * stock_prices_new).sum()
-        buy_hold_last = self.buy_hold_last
+        # buy_hold_comparison = (self.state.buy_hold_comparison * stock_prices_new).sum()
+        # buy_hold_last = self.buy_hold_last
         value_last = self.value_at_last_timestep
         r = (
             remaining_money
             + np.sum(holdings * (stock_prices_new))
         )
         self.value_at_last_timestep = r
-        self.buy_hold_last = buy_hold_comparison
+        # self.buy_hold_last = buy_hold_comparison
         if action_is_invalid:
             r = r - self.invalid_action_penalty # can penalize invalid actions
-        return (r - value_last )- (buy_hold_comparison - buy_hold_last)
+        return r - value_last
 
     def step(self, action):
         """
         Takes action in the current state to get to the next state
-
         Returns an array [new_state, reward, done] where:
             - new_state (State object): state after taking action in the current state
-            - reward (float): reward for taking action in the current state 
-            - done (boolean): whether or not the run is done 
+            - reward (float): reward for taking action in the current state
+            - done (boolean): whether or not the run is done
         """
-
         current_date, current_time = self.get_date_and_time()
         stock_prices_old = self.state.get_stock_prices(current_date, current_time)
         # perform action: if buying, add positions. if selling, subtract positions.
@@ -94,7 +85,6 @@ class StockEnv(gym.Env):
         self.state.advance_state(remaining_money, holdings, new_date, new_time)
         reward = self.calculate_reward(holdings, remaining_money, stock_prices_new, action_is_invalid)
         return self.state, reward, self.is_done()
-        
 
     def increment_date(self):
         """
@@ -119,11 +109,11 @@ class StockEnv(gym.Env):
         """
         Returns: True if the episode is done. False otherwise
         """
-        return self.epochs >= self.max_epochs 
+        return self.epochs >= self.max_epochs
 
     def reset(self, init=False):
         """
-        Resets the environment to a random date in the first 33% of the range 
+        Resets the environment to a random date in the first 33% of the range
         with a random amount of positions and random amount of buying power
         """
         if self.random_start:
@@ -140,7 +130,6 @@ class StockEnv(gym.Env):
         starting_shares = np.array(starting_shares)
         self.value_at_last_timestep = 0
         self.initialize_starting_epoch(self.start_date, self.end_date)
-        
         current_date, current_time = self.get_date_and_time()
         if init:
             self.state = State(self.stock_names, starting_money, starting_shares, current_date, current_time)
@@ -150,7 +139,6 @@ class StockEnv(gym.Env):
         self.buy_hold_last = self.state.buy_hold_comparison
         return self.state
 
-    
     def get_date_and_time(self):
         """
         Gets current date and time
@@ -167,7 +155,7 @@ class StockEnv(gym.Env):
         Calculates the current portfolio value
         """
         return self.state.calculate_portfolio_value()
-    
+
     def get_holdings(self):
         """
         Returns: the current holdings
@@ -212,3 +200,8 @@ class StockEnv(gym.Env):
         else:
             self.epochs = -1
         self.increment_date()  # needed to be sure we're not on a weekend/holiday
+
+
+
+
+
