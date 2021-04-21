@@ -46,7 +46,6 @@ class Actor(nn.Module):
         self.l1 = nn.Linear(64 , 64)
         self.l2 = nn.Linear(64, 64)
         self.l3 = nn.Linear(64, action_dim)
-
         self.max_action = max_action
 
 
@@ -77,25 +76,6 @@ class RNN(nn.Module):
 
         concat = self.output(torch.cat((out, out2), 1))   
         return concat
-
-
-class Actor(nn.Module):
-    def __init__(self, ind_state_dim, imm_state_dim, action_dim, max_action):
-        super(Actor, self).__init__()
-        self.conv = CNN(ind_state_dim, imm_state_dim, 64, 64)
-        self.l1 = nn.Linear(64 , 64)
-        self.l2 = nn.Linear(64, 64)
-        self.l3 = nn.Linear(64, action_dim)
-
-        self.max_action = max_action
-
-
-    def forward(self, ind_state, imm_state):
-        ind_state = self.conv(ind_state, imm_state)
-        a = F.relu(self.l1(ind_state))
-        a = F.relu(self.l2(a))
-        a = self.max_action * torch.tanh(self.l3(a))
-        return a
 
 
 class Critic(nn.Module):
