@@ -6,8 +6,8 @@ import logging
 import datetime
 import random
 
-NUMBER_OF_ITERATIONS = 0
-MAX_LIMIT = 3
+NUMBER_OF_ITERATIONS = 10000
+MAX_LIMIT = 1
 START_TIMESTEPS = 5000
 BATCH_SIZE = 128
 STD_GAUSSIAN_EXPLORATION_NOISE = 0.1
@@ -32,10 +32,7 @@ def select_action(env, state, policy, t):
                     MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE,
                     size=(env.action_space.shape),
                 )
-            )
-            # .clip(0, MAX_LIMIT)
-        action_sh = action.shape
-        action = action.reshape((action_sh[1], action_sh[2]))
+            ).clip(-MAX_LIMIT, MAX_LIMIT)
         # if t % 20 == 0:
         #     utils.log_info("Policy action", action)
                 # action = action.astype(int)
@@ -53,7 +50,7 @@ def run(stock_names,
     # if os.path.exists(save_location + "_actor"):
     #     print("Loaded policy")
     #     policy.load(save_location)
-    replay_buffer = ReplayBuffer(env.state.shape, env.action_space.shape)
+    replay_buffer = ReplayBuffer(env.state.shape, env.action_space.shape[0])
     state, done = env.reset(), False
     episode_reward = 0
     episode_timesteps = 0
@@ -64,13 +61,13 @@ def run(stock_names,
             # Select action randomly or according to policy
             action = select_action(env, state, policy, t)
             # Perform action
-            next_state, reward, done = env.step(action)
+            next_state, reward, done = env.step(action.flatten())
             if pbar.n % 10 == 0:
                 # utils.log_info(f"Date and Time: {env.get_date_and_time()}")
                 # utils.log_info(f"Current Portfolio Value: {env.calculate_portfolio_value()}")
-                pbar.set_description(f"{env.get_date_and_time()[0]} | R: {reward} | A: {action.argmax(-1)} | H: {env.get_holdings()}")
-            if pbar.n % 200 == 0:
-                policy.save(save_location)
+                pbar.set_description(f"{env.get_date_and_time()[0]} | R: {reward} | A: {action} | H: {env.get_holdings()}")
+            # if pbar.n % 200 == 0:
+            #     policy.save(save_location)
             done_bool = float(done) if episode_timesteps < env.max_epochs else 0
             # Store data in replay buffer
             replay_buffer.add(state.to_numpy(), action, next_state.to_numpy(), reward, done_bool)
