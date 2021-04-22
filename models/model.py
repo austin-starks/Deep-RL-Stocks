@@ -25,7 +25,21 @@ class CNN(nn.Module):
             self.shortcut = nn.Identity()
         else:
             self.shortcut = nn.Conv1d(indicator_state_dim[1], outchannel, kernel_size=1)
-        self.output = nn.Linear(outchannel * indicator_state_dim[0], outchannel)
+        
+        self.layers2 = nn.Sequential(
+            nn.Conv1d(immediate_state_dim[1], hidden_size, kernel_size=3, padding=1),
+            nn.BatchNorm1d(hidden_size),
+            activation(),
+            nn.Conv1d(hidden_size, outchannel, kernel_size=3, padding=1),
+            nn.BatchNorm1d(outchannel),
+        )
+        self.relu2 = activation()
+        if immediate_state_dim[1] == outchannel:
+            self.shortcut2 = nn.Identity()
+        else:
+            self.shortcut2 = nn.Conv1d(immediate_state_dim[1], outchannel, kernel_size=1)
+        
+        self.output = nn.Linear(outchannel * indicator_state_dim[0] + outchannel * immediate_state_dim[0], outchannel)
 
     def forward(self, X, X_immediate):
         out =  self.layers(X.permute(0,2,1)).permute(0,2,1)
@@ -33,8 +47,15 @@ class CNN(nn.Module):
         out = self.relu(out + shortcut)
         shape = out.shape
         out = out.reshape((shape[0], shape[1] * shape[2]))
-        out = self.output(out)
-        return out
+
+        out2 =  self.layers2(X_immediate.permute(0,2,1)).permute(0,2,1)
+        shortcut2 = self.shortcut2(X_immediate.permute(0,2,1)).permute(0,2,1)
+        out2 = self.relu2(out2 + shortcut2)
+        shape2 = out2.shape
+        out2 = out2.reshape((shape2[0], shape2[1] * shape2[2]))
+
+        out2 = self.output(torch.cat((out, out2), -1))
+        return out2
 
 class Actor(nn.Module):
     def __init__(self, ind_state_dim, imm_state_dim, action_dim, max_action):
@@ -120,7 +141,7 @@ class TD3(object):
         lr=3e-4
     ):
         indicator_state_dim, immediate_state_dim = state_dim
-        self.actor = Actor(indicator_state_dim, immediate_state_dim[0], action_dim, max_action).to(device)
+        self.actor = Actor(indicator_state_dim, immediate_state_dim, action_dim, max_action).to(device)
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr)
         self.critic = Critic(indicator_state_dim, immediate_state_dim, action_dim, max_action).to(device)
@@ -150,6 +171,7 @@ class TD3(object):
         self.total_it += 1
         # Sample replay buffer
         ind_state, imm_state, action, next_ind_state, next_imm_state, reward, not_done = replay_buffer.sample(batch_size)
+
         with torch.no_grad():
             # Select action according to policy
             noise = (torch.randn_like(action) * self.policy_noise).clamp(
