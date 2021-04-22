@@ -64,7 +64,7 @@ class StockEnv(gym.Env):
         self.buy_hold_last = buy_hold_comparison
         if action_is_invalid:
             r = r - self.invalid_action_penalty # can penalize invalid actions
-        return (r - value_last) - (buy_hold_comparison - buy_hold_last)
+        return r - buy_hold_comparison
 
     def step(self, action):
         """

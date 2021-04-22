@@ -39,7 +39,7 @@ class CNN(nn.Module):
         else:
             self.shortcut2 = nn.Conv1d(immediate_state_dim[1], outchannel, kernel_size=1)
         
-        self.output = nn.Linear(outchannel * indicator_state_dim[0] + outchannel * immediate_state_dim[0], outchannel)
+        self.output = nn.Linear(outchannel * indicator_state_dim[0], outchannel) # + outchannel * immediate_state_dim[0]
 
     def forward(self, X, X_immediate):
         out =  self.layers(X.permute(0,2,1)).permute(0,2,1)
@@ -48,22 +48,22 @@ class CNN(nn.Module):
         shape = out.shape
         out = out.reshape((shape[0], shape[1] * shape[2]))
 
-        out2 =  self.layers2(X_immediate.permute(0,2,1)).permute(0,2,1)
-        shortcut2 = self.shortcut2(X_immediate.permute(0,2,1)).permute(0,2,1)
-        out2 = self.relu2(out2 + shortcut2)
-        shape2 = out2.shape
-        out2 = out2.reshape((shape2[0], shape2[1] * shape2[2]))
+        # out2 =  self.layers2(X_immediate.permute(0,2,1)).permute(0,2,1)
+        # shortcut2 = self.shortcut2(X_immediate.permute(0,2,1)).permute(0,2,1)
+        # out2 = self.relu2(out2 + shortcut2)
+        # shape2 = out2.shape
+        # out2 = out2.reshape((shape2[0], shape2[1] * shape2[2]))
 
-        out2 = self.output(torch.cat((out, out2), -1))
-        return out2
+        out = self.output(out) # torch.cat((out, out2), -1)
+        return out
 
 class Actor(nn.Module):
     def __init__(self, ind_state_dim, imm_state_dim, action_dim, max_action):
         super(Actor, self).__init__()
-        self.conv = CNN(ind_state_dim, imm_state_dim, 64, 64)
-        self.l1 = nn.Linear(64 , 64)
-        self.l2 = nn.Linear(64, 64)
-        self.l3 = nn.Linear(64, action_dim)
+        self.conv = CNN(ind_state_dim, imm_state_dim, 100, 100)
+        self.l1 = nn.Linear(100 , 100)
+        self.l2 = nn.Linear(100, 100)
+        self.l3 = nn.Linear(100, action_dim)
 
         self.max_action = max_action
 
@@ -78,33 +78,34 @@ class Actor(nn.Module):
 class RNN(nn.Module):
     def __init__(self, indicator_state_dim, immediate_state_dim, hidden_size, outchannel, activation=nn.ReLU):
         super(RNN, self).__init__()
-        self.lstm1 = nn.LSTM(indicator_state_dim[0], hidden_size, num_layers=5, batch_first=True)
-        self.lstm2 = nn.LSTM(immediate_state_dim[0], hidden_size, num_layers=5, batch_first=True)
-        self.output = nn.Linear(hidden_size * indicator_state_dim[1] +  hidden_size * immediate_state_dim[1], outchannel)
+        self.lstm1 = nn.LSTM(indicator_state_dim[0], hidden_size, num_layers=3, batch_first=True)
+        self.lstm2 = nn.LSTM(immediate_state_dim[0], hidden_size, num_layers=3, batch_first=True)
+        self.output = nn.Linear(hidden_size * indicator_state_dim[1], outchannel) # +  hidden_size * immediate_state_dim[1]
         
     def forward(self, X, X_immediate):
         out = self.lstm1(X.permute(0,2,1))[0].permute(0,2,1)
-        out2 = self.lstm2(X_immediate.permute(0,2,1))[0].permute(0,2,1)
+        # out2 = self.lstm2(X_immediate.permute(0,2,1))[0].permute(0,2,1)
         shape = out.shape
         out = out.reshape((shape[0], shape[1] * shape[2]))
-        shape2 = out2.shape
-        out2 = out2.reshape((shape2[0], shape2[1] * shape2[2]))
-        concat = self.output(torch.cat((out, out2), 1))
-        return concat
+        # shape2 = out2.shape
+        # out2 = out2.reshape((shape2[0], shape2[1] * shape2[2]))
+        # concat = self.output(torch.cat((out, out2), 1))
+        out = self.output(out)
+        return out
 
 class Critic(nn.Module):
     def __init__(self, indicator_state_dim, immediate_state_dim, action_dim, max_action):
         super(Critic, self).__init__()
         # Q1 architecture
-        self.rnn = RNN(indicator_state_dim, immediate_state_dim, 64, 64)
-        self.l1 = nn.Linear(64 + action_dim, 64)
-        self.l2 = nn.Linear(64, 64)
-        self.l3 = nn.Linear(64, 1)
+        self.rnn = RNN(indicator_state_dim, immediate_state_dim, 100, 100)
+        self.l1 = nn.Linear(100 + action_dim, 100)
+        self.l2 = nn.Linear(100, 100)
+        self.l3 = nn.Linear(100, 1)
         # Q2 architecture
-        self.rnn2 = RNN(indicator_state_dim, immediate_state_dim, 64, 64)
-        self.l4 = nn.Linear(64 + action_dim, 64)
-        self.l5 = nn.Linear(64, 64)
-        self.l6 = nn.Linear(64, 1)
+        self.rnn2 = RNN(indicator_state_dim, immediate_state_dim, 100, 100)
+        self.l4 = nn.Linear(100 + action_dim, 100)
+        self.l5 = nn.Linear(100, 100)
+        self.l6 = nn.Linear(100, 1)
 
     def forward(self, indicator_state, immediate_state, action):
         sa1 = self.rnn(indicator_state, immediate_state)
@@ -147,7 +148,7 @@ class TD3(object):
         self.critic = Critic(indicator_state_dim, immediate_state_dim, action_dim, max_action).to(device)
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr)
-        self.critic_loss = torch.nn.SmoothL1Loss()
+        self.critic_loss = torch.nn.MSELoss()
         self.max_action = max_action
         self.discount = discount
         self.tau = tau
@@ -155,6 +156,9 @@ class TD3(object):
         self.noise_clip = noise_clip
         self.policy_freq = policy_freq
         self.total_it = 0
+
+        self.actor_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.actor_optimizer, factor=0.5, patience=20,  verbose=True)
+        self.critic_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.critic_optimizer, factor=0.5, patience=20,  verbose=True)
 
     def select_action(self, state_tup):
         ind_state, imm_state = state_tup
@@ -190,19 +194,25 @@ class TD3(object):
         critic_loss = self.critic_loss(current_Q1, target_Q) + F.mse_loss(
             current_Q2, target_Q
         )
+        # print('critic_loss', critic_loss)
         # Optimize the critic
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         self.critic_optimizer.step()
+        # self.critic_scheduler.step(critic_loss)
+
         # Delayed policy updates
         if self.total_it % self.policy_freq == 0:
             # Compute actor losse
+            
             actor_loss = -self.critic.Q1(next_ind_state, next_imm_state,
                                 self.actor(next_ind_state, next_imm_state)).mean()
+            # print('actor loss', actor_loss)
             # Optimize the actor
             self.actor_optimizer.zero_grad()
             actor_loss.backward()
             self.actor_optimizer.step()
+            # self.actor_scheduler.step(actor_loss)
             # Update the frozen target models
             for param, target_param in zip(
                 self.critic.parameters(), self.critic_target.parameters()
@@ -216,6 +226,7 @@ class TD3(object):
                 target_param.data.copy_(
                     self.tau * param.data + (1 - self.tau) * target_param.data
                 )
+    
 
     def save(self, filename):
         torch.save(self.critic.state_dict(), filename + "_critic")
