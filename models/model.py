@@ -4,14 +4,55 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import utility.utils as utils
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Implementation of Twin Delayed Deep Deterministic Policy Gradients (TD3)
 # Paper: https://arxiv.org/abs/1802.09477
 # Original Implementation found on https://github.com/sfujim/TD3/blob/master/TD3.py
 
+
+class RNN(nn.Module):
+    def __init__(
+        self,
+        indicator_state_dim,
+        immediate_state_dim,
+        hidden_size,
+        outchannel,
+    ):
+        super(RNN, self).__init__()
+        self.lstm1 = nn.LSTM(
+            indicator_state_dim[0], hidden_size, num_layers=3, batch_first=True
+        )
+        self.lstm2 = nn.LSTM(
+            immediate_state_dim[0], hidden_size, num_layers=3, batch_first=True
+        )
+        self.output = nn.Linear(
+            hidden_size * indicator_state_dim[1] + hidden_size * immediate_state_dim[1],
+            outchannel,
+        )
+
+    def forward(self, X, X_immediate):
+        out = self.lstm1(X.permute(0, 2, 1))[0].permute(0, 2, 1)
+        out2 = self.lstm2(X_immediate.permute(0, 2, 1))[0].permute(0, 2, 1)
+        shape = out.shape
+        out = out.reshape((shape[0], shape[1] * shape[2]))
+        shape2 = out2.shape
+        out2 = out2.reshape((shape2[0], shape2[1] * shape2[2]))
+        concat = self.output(torch.cat((out, out2), 1))
+        out = self.output(out)
+        return out
+
+
 class CNN(nn.Module):
-    def __init__(self, indicator_state_dim, immediate_state_dim, hidden_size, outchannel, activation=nn.ReLU):
+    def __init__(
+        self,
+        indicator_state_dim,
+        immediate_state_dim,
+        hidden_size,
+        outchannel,
+        activation=nn.PReLU,
+    ):
         super(CNN, self).__init__()
         self.layers = nn.Sequential(
             nn.Conv1d(indicator_state_dim[1], hidden_size, kernel_size=3, padding=1),
@@ -25,7 +66,7 @@ class CNN(nn.Module):
             self.shortcut = nn.Identity()
         else:
             self.shortcut = nn.Conv1d(indicator_state_dim[1], outchannel, kernel_size=1)
-        
+
         self.layers2 = nn.Sequential(
             nn.Conv1d(immediate_state_dim[1], hidden_size, kernel_size=3, padding=1),
             nn.BatchNorm1d(hidden_size),
@@ -37,36 +78,40 @@ class CNN(nn.Module):
         if immediate_state_dim[1] == outchannel:
             self.shortcut2 = nn.Identity()
         else:
-            self.shortcut2 = nn.Conv1d(immediate_state_dim[1], outchannel, kernel_size=1)
-        
-        self.output = nn.Linear(outchannel * indicator_state_dim[0], outchannel) # + outchannel * immediate_state_dim[0]
+            self.shortcut2 = nn.Conv1d(
+                immediate_state_dim[1], outchannel, kernel_size=1
+            )
+
+        self.output = nn.Linear(
+            outchannel * indicator_state_dim[0] + outchannel * immediate_state_dim[0], 
+            outchannel,
+        )
 
     def forward(self, X, X_immediate):
-        out =  self.layers(X.permute(0,2,1)).permute(0,2,1)
-        shortcut = self.shortcut(X.permute(0,2,1)).permute(0,2,1)
+        out = self.layers(X.permute(0, 2, 1)).permute(0, 2, 1)
+        shortcut = self.shortcut(X.permute(0, 2, 1)).permute(0, 2, 1)
         out = self.relu(out + shortcut)
         shape = out.shape
         out = out.reshape((shape[0], shape[1] * shape[2]))
 
-        # out2 =  self.layers2(X_immediate.permute(0,2,1)).permute(0,2,1)
-        # shortcut2 = self.shortcut2(X_immediate.permute(0,2,1)).permute(0,2,1)
-        # out2 = self.relu2(out2 + shortcut2)
-        # shape2 = out2.shape
-        # out2 = out2.reshape((shape2[0], shape2[1] * shape2[2]))
-
-        out = self.output(out) # torch.cat((out, out2), -1)
+        out2 = self.layers2(X_immediate.permute(0, 2, 1)).permute(0, 2, 1)
+        shortcut2 = self.shortcut2(X_immediate.permute(0, 2, 1)).permute(0, 2, 1)
+        out2 = self.relu2(out2 + shortcut2)
+        shape2 = out2.shape
+        out2 = out2.reshape((shape2[0], shape2[1] * shape2[2]))
+        out = self.output(torch.cat((out, out2), -1))
         return out
+
 
 class Actor(nn.Module):
     def __init__(self, ind_state_dim, imm_state_dim, action_dim, max_action):
         super(Actor, self).__init__()
-        self.conv = CNN(ind_state_dim, imm_state_dim, 100, 100)
-        self.l1 = nn.Linear(100 , 100)
-        self.l2 = nn.Linear(100, 100)
-        self.l3 = nn.Linear(100, action_dim)
+        self.conv = CNN(ind_state_dim, imm_state_dim, 256, 256)
+        self.l1 = nn.Linear(256, 256)
+        self.l2 = nn.Linear(256, 256)
+        self.l3 = nn.Linear(256, action_dim)
 
         self.max_action = max_action
-
 
     def forward(self, ind_state, imm_state):
         ind_state = self.conv(ind_state, imm_state)
@@ -75,45 +120,28 @@ class Actor(nn.Module):
         a = self.max_action * torch.tanh(self.l3(a))
         return a
 
-class RNN(nn.Module):
-    def __init__(self, indicator_state_dim, immediate_state_dim, hidden_size, outchannel, activation=nn.ReLU):
-        super(RNN, self).__init__()
-        self.lstm1 = nn.LSTM(indicator_state_dim[0], hidden_size, num_layers=3, batch_first=True)
-        self.lstm2 = nn.LSTM(immediate_state_dim[0], hidden_size, num_layers=3, batch_first=True)
-        self.output = nn.Linear(hidden_size * indicator_state_dim[1], outchannel) # +  hidden_size * immediate_state_dim[1]
-        
-    def forward(self, X, X_immediate):
-        out = self.lstm1(X.permute(0,2,1))[0].permute(0,2,1)
-        # out2 = self.lstm2(X_immediate.permute(0,2,1))[0].permute(0,2,1)
-        shape = out.shape
-        out = out.reshape((shape[0], shape[1] * shape[2]))
-        # shape2 = out2.shape
-        # out2 = out2.reshape((shape2[0], shape2[1] * shape2[2]))
-        # concat = self.output(torch.cat((out, out2), 1))
-        out = self.output(out)
-        return out
 
 class Critic(nn.Module):
-    def __init__(self, indicator_state_dim, immediate_state_dim, action_dim, max_action):
+    def __init__(self, indicator_state_dim, immediate_state_dim, action_dim):
         super(Critic, self).__init__()
         # Q1 architecture
-        self.rnn = RNN(indicator_state_dim, immediate_state_dim, 100, 100)
-        self.l1 = nn.Linear(100 + action_dim, 100)
-        self.l2 = nn.Linear(100, 100)
-        self.l3 = nn.Linear(100, 1)
+        self.cnn = CNN(indicator_state_dim, immediate_state_dim, 256, 256)
+        self.l1 = nn.Linear(256 + action_dim, 256)
+        self.l2 = nn.Linear(256, 256)
+        self.l3 = nn.Linear(256, 1)
         # Q2 architecture
-        self.rnn2 = RNN(indicator_state_dim, immediate_state_dim, 100, 100)
-        self.l4 = nn.Linear(100 + action_dim, 100)
-        self.l5 = nn.Linear(100, 100)
-        self.l6 = nn.Linear(100, 1)
+        self.cnn2 = CNN(indicator_state_dim, immediate_state_dim, 256, 256)
+        self.l4 = nn.Linear(256 + action_dim, 256)
+        self.l5 = nn.Linear(256, 256)
+        self.l6 = nn.Linear(256, 1)
 
     def forward(self, indicator_state, immediate_state, action):
-        sa1 = self.rnn(indicator_state, immediate_state)
+        sa1 = self.cnn(indicator_state, immediate_state)
         sa1 = torch.cat([sa1, action], 1)
         q1 = F.relu(self.l1(sa1))
         q1 = F.relu(self.l2(q1))
         q1 = self.l3(q1)
-        sa2 = self.rnn2(indicator_state, immediate_state)
+        sa2 = self.cnn2(indicator_state, immediate_state)
         sa2 = torch.cat([sa2, action], 1)
         q2 = F.relu(self.l4(sa2))
         q2 = F.relu(self.l5(q2))
@@ -121,12 +149,13 @@ class Critic(nn.Module):
         return q1, q2
 
     def Q1(self, indicator_state_dim, immediate_state, action):
-        sa = self.rnn(indicator_state_dim, immediate_state)
+        sa = self.cnn(indicator_state_dim, immediate_state)
         sa = torch.cat([sa, action], 1)
         q1 = F.relu(self.l1(sa))
         q1 = F.relu(self.l2(q1))
         q1 = self.l3(q1)
         return q1
+
 
 class TD3(object):
     def __init__(
@@ -139,13 +168,17 @@ class TD3(object):
         policy_noise=0.2,
         noise_clip=0.5,
         policy_freq=2,
-        lr=3e-4
+        lr=3e-4,
     ):
         indicator_state_dim, immediate_state_dim = state_dim
-        self.actor = Actor(indicator_state_dim, immediate_state_dim, action_dim, max_action).to(device)
+        self.actor = Actor(
+            indicator_state_dim, immediate_state_dim, action_dim, max_action
+        ).to(device)
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr)
-        self.critic = Critic(indicator_state_dim, immediate_state_dim, action_dim, max_action).to(device)
+        self.critic = Critic(indicator_state_dim, immediate_state_dim, action_dim).to(
+            device
+        )
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr)
         self.critic_loss = torch.nn.MSELoss()
@@ -162,7 +195,7 @@ class TD3(object):
 
     def select_action(self, state_tup):
         ind_state, imm_state = state_tup
-        if (len(ind_state.shape) == 2):
+        if len(ind_state.shape) == 2:
             ind_state = torch.FloatTensor([ind_state]).to(device)
             imm_state = torch.FloatTensor([imm_state]).to(device)
         else:
@@ -174,22 +207,32 @@ class TD3(object):
     def train(self, replay_buffer, batch_size=100):
         self.total_it += 1
         # Sample replay buffer
-        ind_state, imm_state, action, next_ind_state, next_imm_state, reward, not_done = replay_buffer.sample(batch_size)
+        (
+            ind_state,
+            imm_state,
+            action,
+            next_ind_state,
+            next_imm_state,
+            reward,
+            not_done,
+        ) = replay_buffer.sample(batch_size)
 
         with torch.no_grad():
             # Select action according to policy
             noise = (torch.randn_like(action) * self.policy_noise).clamp(
                 -self.noise_clip, self.noise_clip
             )
-            next_action = (self.actor_target(next_ind_state, next_imm_state) + noise).clamp(
-                -self.max_action, self.max_action
-            )
+            next_action = (
+                self.actor_target(next_ind_state, next_imm_state) + noise
+            ).clamp(-self.max_action, self.max_action)
             # Compute the target Q value
-            target_Q1, target_Q2 = self.critic_target(next_ind_state, next_imm_state, next_action)
+            target_Q1, target_Q2 = self.critic_target(
+                next_ind_state, next_imm_state, next_action
+            )
             target_Q = torch.min(target_Q1, target_Q2)
             target_Q = reward + not_done * self.discount * target_Q
         # Get current Q estimates
-        current_Q1, current_Q2 = self.critic(next_ind_state, next_imm_state, action)
+        current_Q1, current_Q2 = self.critic(ind_state, imm_state, action)
         # Compute critic loss
         critic_loss = self.critic_loss(current_Q1, target_Q) + F.mse_loss(
             current_Q2, target_Q
@@ -204,10 +247,9 @@ class TD3(object):
         # Delayed policy updates
         if self.total_it % self.policy_freq == 0:
             # Compute actor losse
-            
-            actor_loss = -self.critic.Q1(next_ind_state, next_imm_state,
-                                self.actor(next_ind_state, next_imm_state)).mean()
-            # print('actor loss', actor_loss)
+            actor_loss = -self.critic.Q1(
+                ind_state, imm_state, self.actor(ind_state, imm_state),
+            ).mean()
             # Optimize the actor
             self.actor_optimizer.zero_grad()
             actor_loss.backward()
@@ -244,6 +286,7 @@ class TD3(object):
         self.actor_optimizer.load_state_dict(torch.load(filename + "_actor_optimizer"))
         self.actor_target = copy.deepcopy(self.actor)
 
+
 class ReplayBuffer(object):
     def __init__(self, state_dim, action_dim, max_size=int(1e6)):
         indicator_state, immediate_state = state_dim
@@ -271,12 +314,7 @@ class ReplayBuffer(object):
         self.not_done = np.zeros((max_size, 1))
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def add(self,
-            state,
-            action,
-            next_state,
-            reward,
-            done):
+    def add(self, state, action, next_state, reward, done):
         indicator_state, immediate_state = state
         next_indicator_state, next_immediate_state = next_state
         self.immediate_state[self.ptr] = immediate_state
@@ -285,7 +323,7 @@ class ReplayBuffer(object):
         self.next_immediate_state[self.ptr] = next_immediate_state
         self.next_indicator_state[self.ptr] = next_indicator_state
         self.reward[self.ptr] = reward
-        self.not_done[self.ptr] = 1. - done
+        self.not_done[self.ptr] = 1.0 - done
         self.ptr = (self.ptr + 1) % self.max_size
         self.size = min(self.size + 1, self.max_size)
 
@@ -298,5 +336,6 @@ class ReplayBuffer(object):
             torch.FloatTensor(self.next_indicator_state[ind]).to(self.device),
             torch.FloatTensor(self.next_immediate_state[ind]).to(self.device),
             torch.FloatTensor(self.reward[ind]).to(self.device),
-            torch.FloatTensor(self.not_done[ind]).to(self.device)
+            torch.FloatTensor(self.not_done[ind]).to(self.device),
         )
+

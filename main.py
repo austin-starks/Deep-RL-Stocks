@@ -5,47 +5,68 @@ from pathlib import Path
 import logging
 import datetime
 import random
+import sys
+from torch.utils.tensorboard import SummaryWriter
 
-NUMBER_OF_ITERATIONS = 10000
-MAX_LIMIT = 1
+NUMBER_OF_ITERATIONS = 60000
+MAX_LIMIT = 0.5
 START_TIMESTEPS = 5000
 BATCH_SIZE = 128
-STD_GAUSSIAN_EXPLORATION_NOISE = 0.1
+STD_GAUSSIAN_EXPLORATION_NOISE = 0.5
 EPSILON = 0.2
 EPSILON_DECR = 0.0002
 EPSILON_LOW = 0.025
 
+
 def is_greedy(t):
     global EPSILON
-    random_num= random.random()
+    random_num = random.random()
     result = random_num > EPSILON
     EPSILON = max(EPSILON_LOW, EPSILON - EPSILON_DECR)
     return result
 
+
 def select_action(env, state, policy, t):
-    if t < START_TIMESTEPS or not is_greedy(t):
+    if t < START_TIMESTEPS :
         action = env.action_space.sample()
     else:
-        action = (policy.select_action(state.to_numpy())
-                + np.random.normal(
-                    0,
-                    MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE,
-                    size=(env.action_space.shape),
-                )
-            ).clip(-MAX_LIMIT, MAX_LIMIT)
+        action = (
+            policy.select_action(state.to_numpy())
+            + np.random.normal(
+                0,
+                MAX_LIMIT * STD_GAUSSIAN_EXPLORATION_NOISE,
+                size=(env.action_space.shape),
+            )
+        ).clip(-MAX_LIMIT, MAX_LIMIT)
         # if t % 20 == 0:
         #     utils.log_info("Policy action", action)
-                # action = action.astype(int)
+        # action = action.astype(int)
     return action
 
-def run(stock_names,
+
+def run(
+    stock_names,
+    start_date,
+    end_date,
+    random_start=True,
+    save_location="results/initial_policy",
+):
+    env = StockEnv(
+        stock_names,
         start_date,
         end_date,
-        random_start=True,
-        save_location="results/initial_policy"):
-    env = StockEnv(stock_names, start_date, end_date, max_limit=MAX_LIMIT, random_start=random_start)
+        max_limit=MAX_LIMIT,
+        random_start=random_start,
+    )
     utils.log_info("Environment Initilized")
-    policy = TD3(env.state.shape, env.action_space.shape[0], max_action=MAX_LIMIT, policy_freq=2, lr=0.002)
+    writer = SummaryWriter()
+    policy = TD3(
+        env.state.shape,
+        env.action_space.shape[0],
+        max_action=MAX_LIMIT,
+        policy_freq=2,
+        lr=2e-3,
+    )
     # os.path.exists('initial_policy')
     # if os.path.exists(save_location + "_actor"):
     #     print("Loaded policy")
@@ -55,7 +76,7 @@ def run(stock_names,
     episode_reward = 0
     episode_timesteps = 0
     episode_num = 0
-    with tqdm(total=NUMBER_OF_ITERATIONS) as pbar:
+    with tqdm(total=NUMBER_OF_ITERATIONS, file=sys.stdout) as pbar:
         for t in range(NUMBER_OF_ITERATIONS):
             episode_timesteps += 1
             # Select action randomly or according to policy
@@ -65,12 +86,28 @@ def run(stock_names,
             if pbar.n % 10 == 0:
                 # utils.log_info(f"Date and Time: {env.get_date_and_time()}")
                 # utils.log_info(f"Current Portfolio Value: {env.calculate_portfolio_value()}")
-                pbar.set_description(f"{env.get_date_and_time()[0]} | R: {reward} | A: {action} | H: {env.get_holdings()}")
+                pbar.set_description(
+                    f"{env.get_date_and_time()[0]} | R: {reward} | A: {action} | H: {env.get_holdings()}"
+                )
             # if pbar.n % 200 == 0:
             #     policy.save(save_location)
             done_bool = float(done) if episode_timesteps < env.max_epochs else 0
             # Store data in replay buffer
-            replay_buffer.add(state.to_numpy(), action, next_state.to_numpy(), reward, done_bool)
+            replay_buffer.add(
+                state.to_numpy(), action, next_state.to_numpy(), reward, done_bool
+            )
+            if t >= START_TIMESTEPS:
+                writer.add_scalars(
+                    "holdings",
+                    {sn: v for sn, v in zip(stock_names, env.get_holdings())},
+                    t - START_TIMESTEPS,
+                )
+                writer.add_scalars(
+                    "action",
+                    {sn: v for sn, v in zip(stock_names, action)},
+                    t - START_TIMESTEPS,
+                )
+                writer.add_scalar("reward", reward, t - START_TIMESTEPS)
             state = next_state
             episode_reward += reward
             # Train agent after collecting sufficient data
@@ -84,32 +121,45 @@ def run(stock_names,
                 # Reset environment
                 state, done = env.reset(), False
                 utils.log_info("episode_reward", episode_reward)
-                utils.log_info("reward per timestep", episode_reward / episode_timesteps)
+                utils.log_info(
+                    "reward per timestep", episode_reward / episode_timesteps
+                )
                 episode_reward = 0
                 episode_timesteps = 0
                 episode_num += 1
             pbar.update()
     return policy, replay_buffer
 
+
 def append_portfolio_value(df, env):
     value = env.calculate_portfolio_value()
     date, time = env.get_date_and_time()
-    time = '09:30AM' if time == 'Open' else '04:00PM'
+    time = "09:30AM" if time == "Open" else "04:00PM"
     datetime = date + " " + time
-    return df.append(pd.DataFrame([round(value, 2)], columns=['Portfolio Value'], index=[datetime]))
+    return df.append(
+        pd.DataFrame([round(value, 2)], columns=["Portfolio Value"], index=[datetime])
+    )
 
-def test(stock_names,
-        start_date,
-        end_date,
-        policy,
-        replay_buffer,
-        save_location='results/initial_policy'
-        ):
-    env = StockEnv(stock_names, start_date=start_date, end_date=end_date, max_limit=MAX_LIMIT, random_start=False)
+
+def test(
+    stock_names,
+    start_date,
+    end_date,
+    policy,
+    replay_buffer,
+    save_location="results/initial_policy",
+):
+    env = StockEnv(
+        stock_names,
+        start_date=start_date,
+        end_date=end_date,
+        max_limit=MAX_LIMIT,
+        random_start=False,
+    )
     utils.log_info("Testing policy")
     state, done = env.reset(), False
     episode_reward = 0
-    df = pd.DataFrame(columns=['Portfolio Value'])
+    df = pd.DataFrame(columns=["Portfolio Value"])
     df = append_portfolio_value(df, env)
     utils.log_info("Testing...")
     while not done:
@@ -123,17 +173,32 @@ def test(stock_names,
         episode_reward += reward
         # policy.train(replay_buffer, BATCH_SIZE)
         df = append_portfolio_value(df, env)
-    df.to_csv(save_location, index_label='Date')
+    df.to_csv(save_location, index_label="Date")
+
 
 if __name__ == "__main__":
-    path = os.path.dirname(Path(__file__).absolute())
-    format_short = '[%(filename)s:%(lineno)d] %(message)s'
-    format_long = '%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s'
-    logging.basicConfig(
-        filename=f'{path}/logs/{str(datetime.datetime.now())}.log',
-        format=format_long,
-        datefmt='%Y-%m-%d:%H:%M:%S',
-        level=logging.INFO,
-        filemode="w")
-    policy, replay_buffer = run(['SPY'], '01-01-2011', '01-01-2015', save_location="results/experiment7", random_start=False)
-    test(['SPY'], '01-01-2016', '09-30-2018', policy, replay_buffer, save_location=f"results/test_results_{NUMBER_OF_ITERATIONS}.csv")
+    # path = os.path.dirname(Path(__file__).absolute())
+    # format_short = '[%(filename)s:%(lineno)d] %(message)s'
+    # format_long = '%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s'
+    # logging.basicConfig(
+    #     filename=f'{path}/logs/{str(datetime.datetime.now())}.log',
+    #     format=format_long,
+    #     datefmt='%Y-%m-%d:%H:%M:%S',
+    #     level=logging.INFO,
+    #     filemode="w")
+    policy, replay_buffer = run(
+        ["SPY"],
+        "01-01-2011",
+        "01-01-2015",
+        save_location="results/experiment7",
+        random_start=False,
+    )
+    test(
+        ["SPY"],
+        "01-01-2016",
+        "09-30-2018",
+        policy,
+        replay_buffer,
+        save_location=f"results/test_results_{NUMBER_OF_ITERATIONS}.csv",
+    )
+
