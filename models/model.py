@@ -11,37 +11,19 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Paper: https://arxiv.org/abs/1802.09477
 # Original Implementation found on https://github.com/sfujim/TD3/blob/master/TD3.py
 
-
-class RNN(nn.Module):
-    def __init__(
-        self,
-        indicator_state_dim,
-        immediate_state_dim,
-        hidden_size,
-        outchannel,
-    ):
-        super(RNN, self).__init__()
-        self.lstm1 = nn.LSTM(
-            indicator_state_dim[0], hidden_size, num_layers=4, batch_first=True
-        )
-        self.lstm2 = nn.LSTM(
-            immediate_state_dim[0], hidden_size, num_layers=4, batch_first=True
-        )
-        self.output = nn.Linear(
-            hidden_size * indicator_state_dim[1] + hidden_size * immediate_state_dim[1],
-            outchannel,
-        )
-
-    def forward(self, X, X_immediate):
-        out = self.lstm1(X.permute(0, 2, 1))[0].permute(0, 2, 1)
-        out2 = self.lstm2(X_immediate.permute(0, 2, 1))[0].permute(0, 2, 1)
-        shape = out.shape
-        out = out.reshape((shape[0], shape[1] * shape[2]))
-        shape2 = out2.shape
-        out2 = out2.reshape((shape2[0], shape2[1] * shape2[2]))
-        concat = self.output(torch.cat((out, out2), 1))
-        out = self.output(out)
-        return out
+class FirstBlock(nn.Module):
+    def __init__(self, in_channel, out_channel):
+        super().__init__()
+        self.conv = nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv.weight = torch.nn.init.kaiming_normal_(self.conv.weight, mode='fan_in')
+        self.bn = nn.BatchNorm2d(out_channel)
+        self.relu = nn.PReLU()
+        
+    def forward(self, x):
+        out = self.conv(x)
+        out = self.bn(out)
+        out = self.relu(out)
+        return out    
 
 
 class CNN(nn.Module):
@@ -55,32 +37,13 @@ class CNN(nn.Module):
     ):
         super(CNN, self).__init__()
         self.layers = nn.Sequential(
-            nn.Conv2d(1, hidden_size, kernel_size=3, padding=1),
-            nn.BatchNorm2d(hidden_size),
-            activation(),
-            nn.Conv2d(hidden_size, outchannel, kernel_size=3, padding=1),
-            nn.BatchNorm2d(outchannel),
+            FirstBlock(1, hidden_size),
         )
-        self.relu = activation()
-        if 1 == outchannel:
-            self.shortcut = nn.Identity()
-        else:
-            self.shortcut = nn.Conv2d(1, outchannel, kernel_size=1)
-
+       
         self.layers2 = nn.Sequential(
-            nn.Conv2d(1, hidden_size, kernel_size=3, padding=1),
-            nn.BatchNorm2d(hidden_size),
-            activation(),
-            nn.Conv2d(hidden_size, outchannel, kernel_size=3, padding=1),
-            nn.BatchNorm2d(outchannel),
-        )
-        self.relu2 = activation()
-        if 1 == outchannel:
-            self.shortcut2 = nn.Identity()
-        else:
-            self.shortcut2 = nn.Conv2d(
-                1, outchannel, kernel_size=1
-            )
+            FirstBlock(1, hidden_size),
+        )       
+
         self.flatten = nn.Flatten()
 
         self.output = nn.Linear(
@@ -90,15 +53,10 @@ class CNN(nn.Module):
         )
 
     def forward(self, X, X_immediate):
-        out = self.layers(X.unsqueeze(0))
-        shortcut = self.shortcut(X.unsqueeze(0))
-        out = self.relu(out + shortcut)
-       
+        out = self.layers(X.unsqueeze(1))   
         out = self.flatten(out)
 
-        out2 = self.layers2(X_immediate.unsqueeze(0))
-        shortcut2 = self.shortcut2(X_immediate.unsqueeze(0))
-        out2 = self.relu2(out2 + shortcut2)
+        out2 = self.layers2(X_immediate.unsqueeze(1))
         out2 = self.flatten(out2)
 
         out = self.output(torch.cat((out, out2), -1))
