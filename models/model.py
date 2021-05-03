@@ -71,46 +71,52 @@ class CNN(nn.Module):
         self.layers = nn.Sequential(
             FirstBlock(1, 32),
 
-            InnerBlock(32, 64), 
-            InnerBlock(64, 64),
+            InnerBlock(32, 32), 
+            InnerBlock(32, 32),
 
-            InnerBlock(64, 64, stride=2), 
-            InnerBlock(64, 128),
-            InnerBlock(128, 128),
+            InnerBlock(32, 32, stride=2), 
+            InnerBlock(32, 32),
+            nn.Dropout(0.15),
+            InnerBlock(32, 32),
 
-            InnerBlock(128, 256, stride=2), 
-            InnerBlock(256, 256), 
-            InnerBlock(256, 256), 
+            InnerBlock(32, 32, stride=2), 
+            InnerBlock(32, 32), 
+            nn.Dropout(0.15),
+            InnerBlock(32, 32), 
 
-            InnerBlock(256, 512, stride=2), 
-            InnerBlock(512, 512), 
-            InnerBlock(512, 512), 
+            InnerBlock(32, 64, stride=2), 
+            InnerBlock(64, 64), 
+            nn.Dropout(0.15),
+            InnerBlock(64, 64), 
             nn.AdaptiveAvgPool2d((1, 1))
         )
        
         self.layers2 = nn.Sequential(
             FirstBlock(1, 32),
 
-            InnerBlock(32, 64), 
-            InnerBlock(64, 64),
+            InnerBlock(32, 32), 
+            InnerBlock(32, 32),
 
-            InnerBlock(64, 128, stride=2), 
-            InnerBlock(128, 128),
-            InnerBlock(128, 128),
+            InnerBlock(32, 32, stride=2), 
+            InnerBlock(32, 32),
+            nn.Dropout(0.15),
+            InnerBlock(32, 32),
 
-            InnerBlock(128, 256, stride=2), 
-            InnerBlock(256, 256), 
-            InnerBlock(256, 256), 
+            InnerBlock(32, 32, stride=2), 
+            InnerBlock(32, 32), 
+            nn.Dropout(0.15),
+            InnerBlock(32, 32), 
 
-            InnerBlock(256, 512, stride=2), 
-            InnerBlock(512, 512), 
-            InnerBlock(512, 512), 
+            InnerBlock(32, 64, stride=2), 
+            InnerBlock(64, 64), 
+            nn.Dropout(0.15),
+            InnerBlock(64, 64), 
 
             nn.AdaptiveAvgPool2d((1, 1))
         )       
 
         self.flatten = nn.Flatten()
-        self.output = nn.Linear(512 + 512,  outchannel)
+        self.output = nn.Linear(64 + 64,  outchannel)
 
 
     def forward(self, X, X_immediate):
