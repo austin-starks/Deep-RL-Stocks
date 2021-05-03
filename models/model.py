@@ -22,10 +22,10 @@ class RNN(nn.Module):
     ):
         super(RNN, self).__init__()
         self.lstm1 = nn.LSTM(
-            indicator_state_dim[0], hidden_size, num_layers=3, batch_first=True
+            indicator_state_dim[0], hidden_size, num_layers=4, batch_first=True
         )
         self.lstm2 = nn.LSTM(
-            immediate_state_dim[0], hidden_size, num_layers=3, batch_first=True
+            immediate_state_dim[0], hidden_size, num_layers=4, batch_first=True
         )
         self.output = nn.Linear(
             hidden_size * indicator_state_dim[1] + hidden_size * immediate_state_dim[1],
@@ -55,50 +55,52 @@ class CNN(nn.Module):
     ):
         super(CNN, self).__init__()
         self.layers = nn.Sequential(
-            nn.Conv1d(indicator_state_dim[1], hidden_size, kernel_size=3, padding=1),
-            nn.BatchNorm1d(hidden_size),
+            nn.Conv2d(1, hidden_size, kernel_size=3, padding=1),
+            nn.BatchNorm2d(hidden_size),
             activation(),
-            nn.Conv1d(hidden_size, outchannel, kernel_size=3, padding=1),
-            nn.BatchNorm1d(outchannel),
+            nn.Conv2d(hidden_size, outchannel, kernel_size=3, padding=1),
+            nn.BatchNorm2d(outchannel),
         )
         self.relu = activation()
-        if indicator_state_dim[1] == outchannel:
+        if 1 == outchannel:
             self.shortcut = nn.Identity()
         else:
-            self.shortcut = nn.Conv1d(indicator_state_dim[1], outchannel, kernel_size=1)
+            self.shortcut = nn.Conv2d(1, outchannel, kernel_size=1)
 
         self.layers2 = nn.Sequential(
-            nn.Conv1d(immediate_state_dim[1], hidden_size, kernel_size=3, padding=1),
-            nn.BatchNorm1d(hidden_size),
+            nn.Conv2d(1, hidden_size, kernel_size=3, padding=1),
+            nn.BatchNorm2d(hidden_size),
             activation(),
-            nn.Conv1d(hidden_size, outchannel, kernel_size=3, padding=1),
-            nn.BatchNorm1d(outchannel),
+            nn.Conv2d(hidden_size, outchannel, kernel_size=3, padding=1),
+            nn.BatchNorm2d(outchannel),
         )
         self.relu2 = activation()
-        if immediate_state_dim[1] == outchannel:
+        if 1 == outchannel:
             self.shortcut2 = nn.Identity()
         else:
-            self.shortcut2 = nn.Conv1d(
-                immediate_state_dim[1], outchannel, kernel_size=1
+            self.shortcut2 = nn.Conv2d(
+                1, outchannel, kernel_size=1
             )
+        self.flatten = nn.Flatten()
 
         self.output = nn.Linear(
-            outchannel * indicator_state_dim[0] + outchannel * immediate_state_dim[0], 
+            outchannel * indicator_state_dim[0] * indicator_state_dim[1] + \
+                 outchannel * immediate_state_dim[0] * immediate_state_dim[1], 
             outchannel,
         )
 
     def forward(self, X, X_immediate):
-        out = self.layers(X.permute(0, 2, 1)).permute(0, 2, 1)
-        shortcut = self.shortcut(X.permute(0, 2, 1)).permute(0, 2, 1)
+        out = self.layers(X.unsqueeze(0))
+        shortcut = self.shortcut(X.unsqueeze(0))
         out = self.relu(out + shortcut)
-        shape = out.shape
-        out = out.reshape((shape[0], shape[1] * shape[2]))
+       
+        out = self.flatten(out)
 
-        out2 = self.layers2(X_immediate.permute(0, 2, 1)).permute(0, 2, 1)
-        shortcut2 = self.shortcut2(X_immediate.permute(0, 2, 1)).permute(0, 2, 1)
+        out2 = self.layers2(X_immediate.unsqueeze(0))
+        shortcut2 = self.shortcut2(X_immediate.unsqueeze(0))
         out2 = self.relu2(out2 + shortcut2)
-        shape2 = out2.shape
-        out2 = out2.reshape((shape2[0], shape2[1] * shape2[2]))
+        out2 = self.flatten(out2)
+
         out = self.output(torch.cat((out, out2), -1))
         return out
 
@@ -106,10 +108,10 @@ class CNN(nn.Module):
 class Actor(nn.Module):
     def __init__(self, ind_state_dim, imm_state_dim, action_dim, max_action):
         super(Actor, self).__init__()
-        self.conv = CNN(ind_state_dim, imm_state_dim, 256, 256)
-        self.l1 = nn.Linear(256, 256)
-        self.l2 = nn.Linear(256, 256)
-        self.l3 = nn.Linear(256, action_dim)
+        self.conv = CNN(ind_state_dim, imm_state_dim, 512, 512)
+        self.l1 = nn.Linear(512, 512)
+        self.l2 = nn.Linear(512, 512)
+        self.l3 = nn.Linear(512, action_dim)
 
         self.max_action = max_action
 
@@ -125,15 +127,15 @@ class Critic(nn.Module):
     def __init__(self, indicator_state_dim, immediate_state_dim, action_dim):
         super(Critic, self).__init__()
         # Q1 architecture
-        self.cnn = CNN(indicator_state_dim, immediate_state_dim, 256, 256)
-        self.l1 = nn.Linear(256 + action_dim, 256)
-        self.l2 = nn.Linear(256, 256)
-        self.l3 = nn.Linear(256, 1)
+        self.cnn = CNN(indicator_state_dim, immediate_state_dim, 512, 512)
+        self.l1 = nn.Linear(512 + action_dim, 512)
+        self.l2 = nn.Linear(512, 512)
+        self.l3 = nn.Linear(512, 1)
         # Q2 architecture
-        self.cnn2 = CNN(indicator_state_dim, immediate_state_dim, 256, 256)
-        self.l4 = nn.Linear(256 + action_dim, 256)
-        self.l5 = nn.Linear(256, 256)
-        self.l6 = nn.Linear(256, 1)
+        self.cnn2 = CNN(indicator_state_dim, immediate_state_dim, 512, 512)
+        self.l4 = nn.Linear(512 + action_dim, 512)
+        self.l5 = nn.Linear(512, 512)
+        self.l6 = nn.Linear(512, 1)
 
     def forward(self, indicator_state, immediate_state, action):
         sa1 = self.cnn(indicator_state, immediate_state)

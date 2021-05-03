@@ -62,7 +62,8 @@ class State(object):
                 # We do not know the High, Low, Close, or indicators of the current date at open
                 # We must zero them out so the agent is not looking at the future
                 open_price = data.loc[current_date]['Open']
-                data.loc[current_date] = 0
+                yesterday = data.iloc[data.index.get_loc(current_date) - 1]
+                data.loc[current_date] = yesterday
                 data.loc[current_date]['Open'] = open_price
             # print("data", data)
             data_as_numpy = data.to_numpy()
@@ -147,7 +148,7 @@ class State(object):
             # df["seven_day_mean_moving_average"] = df.rolling(window=7).mean()['Close']
             # df["thirty_day_mean_moving_average"] = df.rolling(window=30).mean()['Close']
             # df["ninety_day_mean_moving_average"] = df.rolling(window=90).mean()['Close']
-            # df["two_hundred_day_mean_moving_average"] = df.rolling(window=200).mean()['Close']
+            df["two_hundred_day_mean_moving_average"] = df.rolling(window=200).mean()['Close']
             # df["seven_day_std_moving_average"] = df.rolling(window=7).std()['Close']
             # df["thirty_day_std_moving_average"] = df.rolling(window=30).std()['Close']
             # df["ninety_day_std_moving_average"] = df.rolling(window=90).std()['Close']
@@ -156,6 +157,8 @@ class State(object):
             df["upper_bolliander_band"] = df.rolling(window=20).mean()['Close'] + 2 * df.rolling(window=20).std()['Close']
             df["lower_bolliander_band"] = df.rolling(window=20).mean()['Close'] - 2 * df.rolling(window=20).std()['Close']
             # get rsi
+            df["upper_bolliander_vol"] = df.rolling(window=20).mean()['Volume'] + 2 * df.rolling(window=20).std()['Volume']
+            df["lower_bolliander_vol"] = df.rolling(window=20).mean()['Volume'] - 2 * df.rolling(window=20).std()['Volume']
             diff = df['Close'].diff(1).dropna()
             up_chg = 0 * diff
             down_chg = 0 * diff
@@ -166,7 +169,10 @@ class State(object):
             rs = abs(up_chg_avg/down_chg_avg)
             rsi = 100 - 100/(1+rs)
             df['rsi'] = rsi
-            self.dataframes[stock] = df.dropna()
+            df['roc'] = df['Close'].pct_change()
+            df = df.dropna()
+
+            self.dataframes[stock] = df
             self.dataframes[stock]
 
     def reset(self, starting_money, starting_shares, current_date, current_time):
