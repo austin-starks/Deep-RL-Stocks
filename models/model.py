@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import utility.utils as utils
+from math import floor
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -15,15 +16,47 @@ class FirstBlock(nn.Module):
     def __init__(self, in_channel, out_channel):
         super().__init__()
         self.conv = nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=1, padding=1, bias=False)
-        self.conv.weight = torch.nn.init.kaiming_normal_(self.conv.weight, mode='fan_in')
+        torch.nn.init.kaiming_normal_(self.conv.weight, mode='fan_in')
         self.bn = nn.BatchNorm2d(out_channel)
-        self.relu = nn.PReLU()
+        self.prelu = nn.PReLU()
         
     def forward(self, x):
         out = self.conv(x)
         out = self.bn(out)
-        out = self.relu(out)
+        out = self.prelu(out)
         return out    
+
+    
+class InnerBlock(nn.Module):
+    def __init__(self, in_channel, out_channel, stride=1):
+        super().__init__()
+        assert stride == 1 or stride == 2
+        self.conv = nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=stride, padding=1)
+        torch.nn.init.kaiming_normal_(self.conv.weight, mode='fan_out')
+        self.bn = nn.BatchNorm2d(out_channel)
+        
+        self.conv2 = nn.Conv2d(out_channel, out_channel, kernel_size=3, stride=1, padding=1)
+        torch.nn.init.kaiming_normal_(self.conv2.weight, mode='fan_out')
+        self.bn2 = nn.BatchNorm2d(out_channel)
+        
+        self.prelu = nn.PReLU()
+        
+        if stride == 1 and in_channel == out_channel:
+            self.shortcut = nn.Identity()
+        else:            
+            self.shortcut = nn.Conv2d(in_channel, out_channel, kernel_size=1, stride=stride)
+            torch.nn.init.kaiming_normal_(self.shortcut.weight, mode='fan_out')
+
+            
+    def forward(self, x):
+        out = self.conv(x)
+        out = self.bn(out)
+        out = self.prelu(out)
+        
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.prelu(self.shortcut(x) + out)
+        return out   
 
 
 class CNN(nn.Module):
@@ -31,26 +64,54 @@ class CNN(nn.Module):
         self,
         indicator_state_dim,
         immediate_state_dim,
-        hidden_size,
         outchannel,
         activation=nn.PReLU,
     ):
         super(CNN, self).__init__()
         self.layers = nn.Sequential(
-            FirstBlock(1, hidden_size),
+            FirstBlock(1, 32),
+
+            InnerBlock(32, 64), 
+            InnerBlock(64, 64),
+
+            InnerBlock(64, 64, stride=2), 
+            InnerBlock(64, 128),
+            InnerBlock(128, 128),
+
+            InnerBlock(128, 256, stride=2), 
+            InnerBlock(256, 256), 
+            InnerBlock(256, 256), 
+
+            InnerBlock(256, 512, stride=2), 
+            InnerBlock(512, 512), 
+            InnerBlock(512, 512), 
+            nn.AdaptiveAvgPool2d((1, 1))
         )
        
         self.layers2 = nn.Sequential(
-            FirstBlock(1, hidden_size),
+            FirstBlock(1, 32),
+
+            InnerBlock(32, 64), 
+            InnerBlock(64, 64),
+
+            InnerBlock(64, 128, stride=2), 
+            InnerBlock(128, 128),
+            InnerBlock(128, 128),
+
+            InnerBlock(128, 256, stride=2), 
+            InnerBlock(256, 256), 
+            InnerBlock(256, 256), 
+
+            InnerBlock(256, 512, stride=2), 
+            InnerBlock(512, 512), 
+            InnerBlock(512, 512), 
+
+            nn.AdaptiveAvgPool2d((1, 1))
         )       
 
         self.flatten = nn.Flatten()
+        self.output = nn.Linear(512 + 512,  outchannel)
 
-        self.output = nn.Linear(
-            outchannel * indicator_state_dim[0] * indicator_state_dim[1] + \
-                 outchannel * immediate_state_dim[0] * immediate_state_dim[1], 
-            outchannel,
-        )
 
     def forward(self, X, X_immediate):
         out = self.layers(X.unsqueeze(1))   
@@ -66,17 +127,18 @@ class CNN(nn.Module):
 class Actor(nn.Module):
     def __init__(self, ind_state_dim, imm_state_dim, action_dim, max_action):
         super(Actor, self).__init__()
-        self.conv = CNN(ind_state_dim, imm_state_dim, 512, 512)
-        self.l1 = nn.Linear(512, 512)
-        self.l2 = nn.Linear(512, 512)
-        self.l3 = nn.Linear(512, action_dim)
+        self.conv = CNN(ind_state_dim, imm_state_dim, 124)
+        self.l1 = nn.Linear(124, 124)
+        self.l2 = nn.Linear(124, 124)
+        self.l3 = nn.Linear(124, action_dim)
 
+        self.prelu = nn.PReLU()
         self.max_action = max_action
 
     def forward(self, ind_state, imm_state):
         ind_state = self.conv(ind_state, imm_state)
-        a = F.relu(self.l1(ind_state))
-        a = F.relu(self.l2(a))
+        a = self.prelu(self.l1(ind_state))
+        a = self.prelu(self.l2(a))
         a = self.max_action * torch.tanh(self.l3(a))
         return a
 
@@ -85,34 +147,36 @@ class Critic(nn.Module):
     def __init__(self, indicator_state_dim, immediate_state_dim, action_dim):
         super(Critic, self).__init__()
         # Q1 architecture
-        self.cnn = CNN(indicator_state_dim, immediate_state_dim, 512, 512)
-        self.l1 = nn.Linear(512 + action_dim, 512)
-        self.l2 = nn.Linear(512, 512)
-        self.l3 = nn.Linear(512, 1)
+        self.cnn = CNN(indicator_state_dim, immediate_state_dim, 124)
+        self.l1 = nn.Linear(124 + action_dim, 124)
+        self.l2 = nn.Linear(124, 124)
+        self.l3 = nn.Linear(124, 1)
         # Q2 architecture
-        self.cnn2 = CNN(indicator_state_dim, immediate_state_dim, 512, 512)
-        self.l4 = nn.Linear(512 + action_dim, 512)
-        self.l5 = nn.Linear(512, 512)
-        self.l6 = nn.Linear(512, 1)
+        self.cnn2 = CNN(indicator_state_dim, immediate_state_dim, 124)
+        self.l4 = nn.Linear(124 + action_dim, 124)
+        self.l5 = nn.Linear(124, 124)
+        self.l6 = nn.Linear(124, 1)
+
+        self.prelu = nn.PReLU()
 
     def forward(self, indicator_state, immediate_state, action):
         sa1 = self.cnn(indicator_state, immediate_state)
         sa1 = torch.cat([sa1, action], 1)
-        q1 = F.relu(self.l1(sa1))
-        q1 = F.relu(self.l2(q1))
+        q1 = self.prelu(self.l1(sa1))
+        q1 = self.prelu(self.l2(q1))
         q1 = self.l3(q1)
         sa2 = self.cnn2(indicator_state, immediate_state)
         sa2 = torch.cat([sa2, action], 1)
-        q2 = F.relu(self.l4(sa2))
-        q2 = F.relu(self.l5(q2))
+        q2 = self.prelu(self.l4(sa2))
+        q2 = self.prelu(self.l5(q2))
         q2 = self.l6(q2)
         return q1, q2
 
     def Q1(self, indicator_state_dim, immediate_state, action):
         sa = self.cnn(indicator_state_dim, immediate_state)
         sa = torch.cat([sa, action], 1)
-        q1 = F.relu(self.l1(sa))
-        q1 = F.relu(self.l2(q1))
+        q1 = self.prelu(self.l1(sa))
+        q1 = self.prelu(self.l2(q1))
         q1 = self.l3(q1)
         return q1
 
@@ -194,7 +258,7 @@ class TD3(object):
         # Get current Q estimates
         current_Q1, current_Q2 = self.critic(ind_state, imm_state, action)
         # Compute critic loss
-        critic_loss = self.critic_loss(current_Q1, target_Q) + F.mse_loss(
+        critic_loss = self.critic_loss(current_Q1, target_Q) + self.mse_loss(
             current_Q2, target_Q
         )
         # print('critic_loss', critic_loss)
