@@ -205,7 +205,6 @@ class TD3(object):
         )
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr)
-        self.critic_loss = torch.nn.MSELoss()
         self.max_action = max_action
         self.discount = discount
         self.tau = tau
@@ -258,15 +257,14 @@ class TD3(object):
         # Get current Q estimates
         current_Q1, current_Q2 = self.critic(ind_state, imm_state, action)
         # Compute critic loss
-        critic_loss = self.critic_loss(current_Q1, target_Q) + self.mse_loss(
+        critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(
             current_Q2, target_Q
         )
-        # print('critic_loss', critic_loss)
         # Optimize the critic
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 1) 
         self.critic_optimizer.step()
-        # self.critic_scheduler.step(critic_loss)
 
         # Delayed policy updates
         if self.total_it % self.policy_freq == 0:
@@ -276,7 +274,10 @@ class TD3(object):
             ).mean()
             # Optimize the actor
             self.actor_optimizer.zero_grad()
+
             actor_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 1) 
+
             self.actor_optimizer.step()
             # self.actor_scheduler.step(actor_loss)
             # Update the frozen target models

@@ -8,7 +8,7 @@ import random
 import sys
 from torch.utils.tensorboard import SummaryWriter
 
-NUMBER_OF_ITERATIONS = 60000
+NUMBER_OF_ITERATIONS = 300000
 MAX_LIMIT = 0.5
 START_TIMESTEPS = 5000
 BATCH_SIZE = 128
@@ -170,7 +170,7 @@ def test(
     while not done:
         # print(env.get_date_and_time())
         action = policy.select_action(state.to_numpy())
-        utils.log_info("action", action)
+        utils.log_info(env.get_date_and_time(), "action", action)
         next_state, reward, done = env.step(action)
         done_bool = float(done)
         # replay_buffer.add(state.to_numpy(), action, next_state.to_numpy(), reward, done_bool)
@@ -179,6 +179,7 @@ def test(
         # policy.train(replay_buffer, BATCH_SIZE)
         df = append_portfolio_value(df, env)
     df.to_csv(save_location, index_label="Date")
+
 
 
 if __name__ == "__main__":

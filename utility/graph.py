@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 def normalize_stock_date(portfolio, stock):
+    print(portfolio)
     starting_date = portfolio['Date'][0]
     ending_date = portfolio['Date'][portfolio.index[-1]]
     space_index = starting_date.find(' ')
@@ -54,22 +55,29 @@ def combine(portfolio, stock):
     # print(SPY_portfolio.head(20))
     return portfolio
 
-def plot(portfolio):
+def plot(portfolio, filename):
     ax = portfolio.plot(title='Portfilio Change Over Time', fontsize=10)
     ax.set_xlabel("Date")
     ax.set_ylabel("Price")
     ax.legend(loc = 'upper left')
     # plt.axhline(y=0, color='r', linestyle='-')
-    plt.show()
+    plt.savefig(filename)
 
+
+def graph(portfolio_df=None, filename='test_results.png'):
+    if portfolio_df is None:
+        portfolio_df = get_data("../results/test_results_0.csv")
+    try:
+        spy = get_data("../data/price_data/SPY.csv")
+    except:
+        spy = get_data("data/price_data/SPY.csv")
+    spy = normalize_stock_date(portfolio_df, spy)
+
+    combined = combine(portfolio_df, spy)
+    plot(combined, filename)
 
 if __name__ == "__main__":
-    portfolio = get_data("../results/test_results_0.csv")
-    stock = get_data("../data/price_data/SPY.csv")
-    stock = normalize_stock_date(portfolio, stock)
-
-    combined = combine(portfolio, stock)
-    plot(combined)
+    graph()
 
 
 

@@ -88,6 +88,7 @@ class State(object):
         current_cash = self.essential_state[0]
         new_holdings = []
         invalid_action = False
+
         for a, holding, price in zip(action, old_holdings, stock_prices):
             if a > 0:
                 cash = a * current_cash / len(old_holdings)
@@ -100,7 +101,7 @@ class State(object):
                 total_price = shares * price
                 current_cash += total_price 
                 new_holdings.append(holding - shares)
-        return np.array(new_holdings), current_cash, invalid_action
+        return np.array(new_holdings), np.array([current_cash.item()]), invalid_action
     
     def get_holdings(self):
         """
@@ -128,8 +129,9 @@ class State(object):
         if current_time == 'Close':
             self.past_state.add(self.essential_state)
         stock_prices = self.get_stock_prices(current_date, current_time)
+
         self.essential_state = np.concatenate([
-            np.array([remaining_money]), holdings, stock_prices
+            remaining_money, holdings.flatten(), stock_prices
         ])
         self.indicator_state = self.get_indicator_state(current_date, current_time)
 
