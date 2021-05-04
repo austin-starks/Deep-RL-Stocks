@@ -122,8 +122,6 @@ class State(object):
         Parameter current_date (string): The date of the new state
         Parameter current_time (string): The time of the new state
         """
-        if current_time == 'Close':
-            self.past_state.add(self.essential_state)
         stock_prices = self.get_stock_prices(current_date, current_time)
 
         self.essential_state = np.concatenate([
@@ -182,8 +180,7 @@ class State(object):
             starting_money, starting_shares, stock_prices
         ])
         self.buy_hold_comparison = self.calculate_portfolio_value() / self.number_of_stocks / stock_prices
-        self.past_state.reset()
-        self.past_state.add(self.essential_state)
+       
 
     def to_numpy(self):
         """
@@ -197,7 +194,7 @@ class State(object):
         """
         Returns: the internal array representing the state
         """
-        self.essential_state
+        return self.essential_state
 
 class PastState(object):
     """

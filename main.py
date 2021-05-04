@@ -5,6 +5,8 @@ from pathlib import Path
 import logging
 import datetime
 import random
+from models.model import DDPG, ReplayBuffer
+import models.random_process
 import sys
 from torch.utils.tensorboard import SummaryWriter
 
@@ -14,10 +16,22 @@ START_TIMESTEPS = 5000
 BATCH_SIZE = 128
 STD_GAUSSIAN_EXPLORATION_NOISE =  0.2
 
+EPSILON = 1
+EPSILON_DECR = 0.001
+EPSILON_LOW = 0.025
+
+
+def is_greedy(t):
+    global EPSILON
+    random_num = random.random()
+    result = random_num > EPSILON
+    EPSILON = max(EPSILON_LOW, EPSILON - EPSILON_DECR)
+    return result
+
 
 def select_action(env, state, policy, t):
     global STD_GAUSSIAN_EXPLORATION_NOISE
-    if t < START_TIMESTEPS:
+    if t < START_TIMESTEPS or is_greedy(t):
         action = env.action_space.sample()
     else:
         action = (
@@ -48,8 +62,8 @@ def run(
     )
     utils.log_info("Environment Initilized")
     writer = SummaryWriter()
-    policy = TD3(
-        env.state.shape,
+    policy = DDPG(
+        env.state.shape[0],
         env.action_space.shape[0],
         max_action=MAX_LIMIT,
         policy_freq=2,
@@ -59,7 +73,7 @@ def run(
     # if os.path.exists(save_location + "_actor"):
     #     print("Loaded policy")
     #     policy.load(save_location)
-    replay_buffer = ReplayBuffer(env.state.shape, env.action_space.shape[0])
+    replay_buffer = ReplayBuffer(env.state.shape[0], env.action_space.shape[0])
     state, done = env.reset(), False
     episode_reward = 0
     episode_timesteps = 0

@@ -8,25 +8,6 @@ from math import floor
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-class OrnsteinUhlenbeckProcess(AnnealedGaussianProcess):
-    def __init__(self, theta, mu=0., sigma=1., dt=1e-2, x0=None, size=1, sigma_min=None, n_steps_annealing=1000):
-        super(OrnsteinUhlenbeckProcess, self).__init__(mu=mu, sigma=sigma, sigma_min=sigma_min, n_steps_annealing=n_steps_annealing)
-        self.theta = theta
-        self.mu = mu
-        self.dt = dt
-        self.x0 = x0
-        self.size = size
-        self.reset_states()
-
-    def sample(self):
-        x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + self.current_sigma * np.sqrt(self.dt) * np.random.normal(size=self.size)
-        self.x_prev = x
-        self.n_steps += 1
-        return x
-
-    def reset_states(self):
-        self.x_prev = self.x0 if self.x0 is not None else np.zeros(self.size)
-
 # Implementation of Twin Delayed Deep Deterministic Policy Gradients (TD3)
 # Paper: https://arxiv.org/abs/1802.09477
 # Original Implementation found on https://github.com/sfujim/TD3/blob/master/TD3.py
@@ -160,23 +141,12 @@ class Actor(nn.Module):
         self.prelu1 = nn.PReLU()
         self.prelu2 = nn.PReLU()
         self.max_action = max_action
-        self.init_weights(3e-3)
-    
-    def init_weights(self, init_w):
-        self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
-        self.fc2.weight.data = fanin_init(self.fc2.weight.data.size())
-        self.fc3.weight.data.uniform_(-init_w, init_w)
-
+     
     def forward(self, state):
         a = self.prelu1(self.l1(state))
         a = self.prelu2(self.l2(a))
         a = self.max_action * torch.tanh(self.l3(a))
         return a
-
-def fanin_init(size, fanin=None):
-    fanin = fanin or size[0]
-    v = 1. / np.sqrt(fanin)
-    return torch.Tensor(size).uniform_(-v, v)
 
 class Critic(nn.Module):
     def __init__(self, state_dim, action_dim):
@@ -187,12 +157,6 @@ class Critic(nn.Module):
         self.l2 = nn.Linear(400, 300)
         self.prelu2 = nn.PReLU()
         self.l3 = nn.Linear(300, 1)
-        self.init_weights(3e-3)
-    
-    def init_weights(self, init_w):
-        self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
-        self.fc2.weight.data = fanin_init(self.fc2.weight.data.size())
-        self.fc3.weight.data.uniform_(-init_w, init_w)
 
     def forward(self, state, action):
         sa = torch.cat([state, action], 1)
@@ -320,10 +284,10 @@ class ReplayBuffer(object):
     def __init__(self, state_dim, action_dim, max_size=int(1e6)):
         self.max_size = max_size
         self.ptr = 0
-        self.size = 0        
-        self.action = np.zeros(action_dim)
-        self.state = np.zeros(state_dim)
-        self.next_state = np.zeros(state_dim)
+        self.size = 0   
+        self.action = np.zeros((max_size, action_dim))
+        self.state = np.zeros((max_size, state_dim))
+        self.next_state = np.zeros((max_size, state_dim))
         self.reward = np.zeros((max_size, 1))
         self.not_done = np.zeros((max_size, 1))
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
