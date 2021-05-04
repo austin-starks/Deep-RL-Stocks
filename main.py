@@ -17,13 +17,13 @@ STD_GAUSSIAN_EXPLORATION_NOISE =  0.2
 
 EPSILON = 1
 EPSILON_DECR = 0.001
-EPSILON_LOW = 0.025
+EPSILON_LOW = 0.05
 
 
 def is_greedy(t):
     global EPSILON
     random_num = random.random()
-    result = random_num > EPSILON
+    result = random_num < EPSILON
     EPSILON = max(EPSILON_LOW, EPSILON - EPSILON_DECR)
     return result
 
@@ -32,7 +32,9 @@ def select_action(env, state, policy, t):
     global STD_GAUSSIAN_EXPLORATION_NOISE
     if t < START_TIMESTEPS or is_greedy(t):
         action = env.action_space.sample()
+        print(EPSILON)
     else:
+        print('here')
         action = (
             policy.select_action(state.to_numpy())
             + np.random.normal(
