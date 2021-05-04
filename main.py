@@ -9,7 +9,7 @@ from models.model import DDPG, ReplayBuffer
 import sys
 from torch.utils.tensorboard import SummaryWriter
 
-NUMBER_OF_ITERATIONS = 300000
+NUMBER_OF_ITERATIONS = 500000
 MAX_LIMIT = 200
 START_TIMESTEPS = 5000
 BATCH_SIZE = 128
@@ -193,7 +193,7 @@ if __name__ == "__main__":
         ["SPY"],
         "01-01-2011",
         "01-01-2015",
-        save_location="results/ddpg",
+        save_location="results/ddpg_improve",
         random_start=False,
     )
     test(
@@ -202,6 +202,6 @@ if __name__ == "__main__":
         "09-30-2018",
         policy,
         replay_buffer,
-        save_location=f"results/test_results_ddpg_{NUMBER_OF_ITERATIONS}.csv",
+        save_location=f"results/test_results_ddpg_improve_{NUMBER_OF_ITERATIONS}.csv",
     )
 

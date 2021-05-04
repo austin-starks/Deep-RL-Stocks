@@ -40,6 +40,7 @@ class State(object):
         self.essential_state = np.concatenate([
             starting_money, starting_shares, stock_prices
         ])
+        self.indicator_state = self.get_indicator_state(current_date, current_time)
         state = self.get_state()
         self.shape = state.shape
         self.buy_hold_comparison = self.calculate_portfolio_value() / self.number_of_stocks / stock_prices
@@ -63,7 +64,8 @@ class State(object):
                 data.loc[current_date]['Open'] = open_price
             # print("data", data)
             data_as_numpy = data.to_numpy()
-            result.append(data_as_numpy)
+            data_as_numpy = np.pad(data_as_numpy, ((self.days_in_state - len(data_as_numpy), 0), (0,0)), mode='constant')
+            result.append(data_as_numpy) 
         return np.array(result)
 
     def get_stock_prices(self, current_date, current_time):
@@ -135,20 +137,45 @@ class State(object):
             macd = exp1 - exp2
             df['macd'] = macd['Close']
             # get moving averages
-            # df["seven_day_mean_moving_average"] = df.rolling(window=7).mean()['Close']
-            # df["thirty_day_mean_moving_average"] = df.rolling(window=30).mean()['Close']
-            # df["ninety_day_mean_moving_average"] = df.rolling(window=90).mean()['Close']
+            df["seven_day_mean_moving_average"] = df.rolling(window=7).mean()['Close']
+            df["thirty_day_mean_moving_average"] = df.rolling(window=30).mean()['Close']
+            df["ninety_day_mean_moving_average"] = df.rolling(window=90).mean()['Close']
             df["two_hundred_day_mean_moving_average"] = df.rolling(window=200).mean()['Close']
-            # df["seven_day_std_moving_average"] = df.rolling(window=7).std()['Close']
-            # df["thirty_day_std_moving_average"] = df.rolling(window=30).std()['Close']
-            # df["ninety_day_std_moving_average"] = df.rolling(window=90).std()['Close']
-            # df["two_hundred_day_std_moving_average"] = df.rolling(window=200).std()['Close']
+            df["seven_day_std_moving_average"] = df.rolling(window=7).std()['Close']
+            df["thirty_day_std_moving_average"] = df.rolling(window=30).std()['Close']
+            df["ninety_day_std_moving_average"] = df.rolling(window=90).std()['Close']
+            df["two_hundred_day_std_moving_average"] = df.rolling(window=200).std()['Close']
+            
+            df["seven_day_mean_moving_average_volume"] = df.rolling(window=7).mean()['Volume']
+            df["thirty_day_mean_moving_average_volume"] = df.rolling(window=30).mean()['Volume']
+            df["ninety_day_mean_moving_average_volume"] = df.rolling(window=90).mean()['Volume']
+            df["two_hundred_day_mean_moving_average_volume"] = df.rolling(window=200).mean()['Volume']
+            df["seven_day_std_moving_average_volume"] = df.rolling(window=7).std()['Volume']
+            df["thirty_day_std_moving_average_volume"] = df.rolling(window=30).std()['Volume']
+            df["ninety_day_std_moving_average_volume"] = df.rolling(window=90).std()['Volume']
+            df["two_hundred_day_std_moving_average_volume"] = df.rolling(window=200).std()['Volume']
+
+
             # get bollander bands
-            df["upper_bolliander_band"] = df.rolling(window=20).mean()['Close'] + 2 * df.rolling(window=20).std()['Close']
-            df["lower_bolliander_band"] = df.rolling(window=20).mean()['Close'] - 2 * df.rolling(window=20).std()['Close']
+            df["seven_upper_bolliander_band"] = df.rolling(window=7).mean()['Close'] + 2 * df.rolling(window=7).std()['Close']
+            df["seven_lower_bolliander_band"] = df.rolling(window=7).mean()['Close'] - 2 * df.rolling(window=7).std()['Close']
+            df["thirty_upper_bolliander_band"] = df.rolling(window=30).mean()['Close'] + 2 * df.rolling(window=30).std()['Close']
+            df["thirty_lower_bolliander_band"] = df.rolling(window=30).mean()['Close'] - 2 * df.rolling(window=30).std()['Close']
+            df["ninety_upper_bolliander_band"] = df.rolling(window=90).mean()['Close'] + 2 * df.rolling(window=90).std()['Close']
+            df["ninety_lower_bolliander_band"] = df.rolling(window=90).mean()['Close'] - 2 * df.rolling(window=90).std()['Close']
+            df["two_hundred_upper_bolliander_band"] = df.rolling(window=200).mean()['Close'] + 2 * df.rolling(window=200).std()['Close']
+            df["two_hundred_lower_bolliander_band"] = df.rolling(window=200).mean()['Close'] - 2 * df.rolling(window=200).std()['Close']
+            
+            df["seven_upper_bolliander_band_volume"] = df.rolling(window=7).mean()['Volume'] + 2 * df.rolling(window=7).std()['Volume']
+            df["seven_lower_bolliander_band_volume"] = df.rolling(window=7).mean()['Volume'] - 2 * df.rolling(window=7).std()['Volume']
+            df["thirty_upper_bolliander_band_volume"] = df.rolling(window=30).mean()['Volume'] + 2 * df.rolling(window=30).std()['Volume']
+            df["thirty_lower_bolliander_band_volume"] = df.rolling(window=30).mean()['Volume'] - 2 * df.rolling(window=30).std()['Volume']
+            df["ninety_upper_bolliander_band_volume"] = df.rolling(window=90).mean()['Volume'] + 2 * df.rolling(window=90).std()['Volume']
+            df["ninety_lower_bolliander_band_volume"] = df.rolling(window=90).mean()['Volume'] - 2 * df.rolling(window=90).std()['Volume']
+            df["two_hundred_upper_bolliander_band_volume"] = df.rolling(window=200).mean()['Volume'] + 2 * df.rolling(window=200).std()['Volume']
+            df["two_hundred_lower_bolliander_band_volume"] = df.rolling(window=200).mean()['Volume'] - 2 * df.rolling(window=200).std()['Volume']
+            
             # get rsi
-            df["upper_bolliander_vol"] = df.rolling(window=20).mean()['Volume'] + 2 * df.rolling(window=20).std()['Volume']
-            df["lower_bolliander_vol"] = df.rolling(window=20).mean()['Volume'] - 2 * df.rolling(window=20).std()['Volume']
             diff = df['Close'].diff(1).dropna()
             up_chg = 0 * diff
             down_chg = 0 * diff
@@ -188,7 +215,7 @@ class State(object):
         """
         Returns: the internal array representing the state
         """
-        return self.essential_state
+        return np.concatenate((self.essential_state, self.indicator_state.flatten()))
 
 class PastState(object):
     """
