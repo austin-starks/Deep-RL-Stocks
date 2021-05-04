@@ -8,9 +8,29 @@ from math import floor
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+class OrnsteinUhlenbeckProcess(AnnealedGaussianProcess):
+    def __init__(self, theta, mu=0., sigma=1., dt=1e-2, x0=None, size=1, sigma_min=None, n_steps_annealing=1000):
+        super(OrnsteinUhlenbeckProcess, self).__init__(mu=mu, sigma=sigma, sigma_min=sigma_min, n_steps_annealing=n_steps_annealing)
+        self.theta = theta
+        self.mu = mu
+        self.dt = dt
+        self.x0 = x0
+        self.size = size
+        self.reset_states()
+
+    def sample(self):
+        x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + self.current_sigma * np.sqrt(self.dt) * np.random.normal(size=self.size)
+        self.x_prev = x
+        self.n_steps += 1
+        return x
+
+    def reset_states(self):
+        self.x_prev = self.x0 if self.x0 is not None else np.zeros(self.size)
+
 # Implementation of Twin Delayed Deep Deterministic Policy Gradients (TD3)
 # Paper: https://arxiv.org/abs/1802.09477
 # Original Implementation found on https://github.com/sfujim/TD3/blob/master/TD3.py
+# Regular DDPG: https://github.com/ghliu/pytorch-ddpg
 
 class FirstBlock(nn.Module):
     def __init__(self, in_channel, out_channel):
@@ -131,84 +151,81 @@ class CNN(nn.Module):
 
 
 class Actor(nn.Module):
-    def __init__(self, ind_state_dim, imm_state_dim, action_dim, max_action):
+    def __init__(self, state_dim, action_dim, max_action):
         super(Actor, self).__init__()
-        self.conv = CNN(ind_state_dim, imm_state_dim, 124)
-        self.l1 = nn.Linear(124, 124)
-        self.l2 = nn.Linear(124, 124)
-        self.l3 = nn.Linear(124, action_dim)
+        self.l1 = nn.Linear(state_dim, 400)
+        self.l2 = nn.Linear(400, 300)
+        self.l3 = nn.Linear(300, action_dim)
 
-        self.prelu = nn.PReLU()
+        self.prelu1 = nn.PReLU()
+        self.prelu2 = nn.PReLU()
         self.max_action = max_action
+        self.init_weights(3e-3)
+    
+    def init_weights(self, init_w):
+        self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
+        self.fc2.weight.data = fanin_init(self.fc2.weight.data.size())
+        self.fc3.weight.data.uniform_(-init_w, init_w)
 
-    def forward(self, ind_state, imm_state):
-        ind_state = self.conv(ind_state, imm_state)
-        a = self.prelu(self.l1(ind_state))
-        a = self.prelu(self.l2(a))
+    def forward(self, state):
+        a = self.prelu1(self.l1(state))
+        a = self.prelu2(self.l2(a))
         a = self.max_action * torch.tanh(self.l3(a))
         return a
 
+def fanin_init(size, fanin=None):
+    fanin = fanin or size[0]
+    v = 1. / np.sqrt(fanin)
+    return torch.Tensor(size).uniform_(-v, v)
 
 class Critic(nn.Module):
-    def __init__(self, indicator_state_dim, immediate_state_dim, action_dim):
+    def __init__(self, state_dim, action_dim):
         super(Critic, self).__init__()
         # Q1 architecture
-        self.cnn = CNN(indicator_state_dim, immediate_state_dim, 124)
-        self.l1 = nn.Linear(124 + action_dim, 124)
-        self.l2 = nn.Linear(124, 124)
-        self.l3 = nn.Linear(124, 1)
-        # Q2 architecture
-        self.cnn2 = CNN(indicator_state_dim, immediate_state_dim, 124)
-        self.l4 = nn.Linear(124 + action_dim, 124)
-        self.l5 = nn.Linear(124, 124)
-        self.l6 = nn.Linear(124, 1)
+        self.l1 = nn.Linear(state_dim + action_dim, 400)
+        self.prelu1 = nn.PReLU()
+        self.l2 = nn.Linear(400, 300)
+        self.prelu2 = nn.PReLU()
+        self.l3 = nn.Linear(300, 1)
+        self.init_weights(3e-3)
+    
+    def init_weights(self, init_w):
+        self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
+        self.fc2.weight.data = fanin_init(self.fc2.weight.data.size())
+        self.fc3.weight.data.uniform_(-init_w, init_w)
 
-        self.prelu = nn.PReLU()
+    def forward(self, state, action):
+        sa = torch.cat([state, action], 1)
+        q = self.prelu1(self.l4(sa))
+        q = self.prelu2(self.l5(q))
+        q = self.l6(q)
+        return q
 
-    def forward(self, indicator_state, immediate_state, action):
-        sa1 = self.cnn(indicator_state, immediate_state)
-        sa1 = torch.cat([sa1, action], 1)
-        q1 = self.prelu(self.l1(sa1))
-        q1 = self.prelu(self.l2(q1))
-        q1 = self.l3(q1)
-        sa2 = self.cnn2(indicator_state, immediate_state)
-        sa2 = torch.cat([sa2, action], 1)
-        q2 = self.prelu(self.l4(sa2))
-        q2 = self.prelu(self.l5(q2))
-        q2 = self.l6(q2)
-        return q1, q2
-
-    def Q1(self, indicator_state_dim, immediate_state, action):
-        sa = self.cnn(indicator_state_dim, immediate_state)
-        sa = torch.cat([sa, action], 1)
-        q1 = self.prelu(self.l1(sa))
-        q1 = self.prelu(self.l2(q1))
+    def Q1(self, state, action):
+        sa = torch.cat([state, action], 1)
+        q1 = self.prelu1(self.l1(sa))
+        q1 = self.prelu2(self.l2(q1))
         q1 = self.l3(q1)
         return q1
 
 
-class TD3(object):
+class DDPG(object):
     def __init__(
         self,
         state_dim,
         action_dim,
         max_action,
-        discount=0.99,
+        discount=0.95,
         tau=0.005,
         policy_noise=0.2,
         noise_clip=0.5,
         policy_freq=2,
         lr=3e-4,
     ):
-        indicator_state_dim, immediate_state_dim = state_dim
-        self.actor = Actor(
-            indicator_state_dim, immediate_state_dim, action_dim, max_action
-        ).to(device)
+        self.actor = Actor(state_dim, action_dim, max_action).to(device)
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr)
-        self.critic = Critic(indicator_state_dim, immediate_state_dim, action_dim).to(
-            device
-        )
+        self.critic = Critic(state_dim, action_dim).to(device)
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr)
         self.max_action = max_action
@@ -222,83 +239,64 @@ class TD3(object):
         self.actor_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.actor_optimizer, factor=0.5, patience=20,  verbose=True)
         self.critic_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.critic_optimizer, factor=0.5, patience=20,  verbose=True)
 
-    def select_action(self, state_tup):
-        ind_state, imm_state = state_tup
-        if len(ind_state.shape) == 2:
-            ind_state = torch.FloatTensor([ind_state]).to(device)
-            imm_state = torch.FloatTensor([imm_state]).to(device)
-        else:
-            ind_state = torch.FloatTensor(ind_state).to(device)
-            imm_state = torch.FloatTensor(imm_state).to(device)
-        action = self.actor(ind_state, imm_state).cpu().data.numpy()
+    def select_action(self, state):
+        action = self.actor(state).cpu().data.numpy()
         return action
 
     def train(self, replay_buffer, batch_size=100):
         self.total_it += 1
         # Sample replay buffer
         (
-            ind_state,
-            imm_state,
+            state,
             action,
-            next_ind_state,
-            next_imm_state,
+            next_state,
             reward,
             not_done,
         ) = replay_buffer.sample(batch_size)
 
         with torch.no_grad():
             # Select action according to policy
-            noise = (torch.randn_like(action) * self.policy_noise).clamp(
-                -self.noise_clip, self.noise_clip
-            )
-            next_action = (
-                self.actor_target(next_ind_state, next_imm_state) + noise
-            ).clamp(-self.max_action, self.max_action)
+            next_action = self.actor_target(state) 
+          
             # Compute the target Q value
-            target_Q1, target_Q2 = self.critic_target(
-                next_ind_state, next_imm_state, next_action
+            target_Q  = self.critic_target(
+                next_state, next_action
             )
-            target_Q = torch.min(target_Q1, target_Q2)
             target_Q = reward + not_done * self.discount * target_Q
         # Get current Q estimates
-        current_Q1, current_Q2 = self.critic(ind_state, imm_state, action)
+        current_Q = self.critic(state, action)
         # Compute critic loss
-        critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(
-            current_Q2, target_Q
-        )
+        critic_loss = F.mse_loss(current_Q, target_Q) 
+
         # Optimize the critic
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 1) 
         self.critic_optimizer.step()
 
-        # Delayed policy updates
-        if self.total_it % self.policy_freq == 0:
-            # Compute actor losse
-            actor_loss = -self.critic.Q1(
-                ind_state, imm_state, self.actor(ind_state, imm_state),
-            ).mean()
-            # Optimize the actor
-            self.actor_optimizer.zero_grad()
+        # Compute actor losse
+        actor_loss = -self.critic.Q1(
+            state, self.actor(state),
+        ).mean()
+        # Optimize the actor
+        self.actor_optimizer.zero_grad()
 
-            actor_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 1) 
+        actor_loss.backward()
 
-            self.actor_optimizer.step()
-            # self.actor_scheduler.step(actor_loss)
-            # Update the frozen target models
-            for param, target_param in zip(
-                self.critic.parameters(), self.critic_target.parameters()
-            ):
-                target_param.data.copy_(
-                    self.tau * param.data + (1 - self.tau) * target_param.data
-                )
-            for param, target_param in zip(
-                self.actor.parameters(), self.actor_target.parameters()
-            ):
-                target_param.data.copy_(
-                    self.tau * param.data + (1 - self.tau) * target_param.data
-                )
+        self.actor_optimizer.step()
+        # self.actor_scheduler.step(actor_loss)
+        # Update the frozen target models
+        for param, target_param in zip(
+            self.critic.parameters(), self.critic_target.parameters()
+        ):
+            target_param.data.copy_(
+                self.tau * param.data + (1 - self.tau) * target_param.data
+            )
+        for param, target_param in zip(
+            self.actor.parameters(), self.actor_target.parameters()
+        ):
+            target_param.data.copy_(
+                self.tau * param.data + (1 - self.tau) * target_param.data
+            )
     
 
     def save(self, filename):
@@ -320,39 +318,20 @@ class TD3(object):
 
 class ReplayBuffer(object):
     def __init__(self, state_dim, action_dim, max_size=int(1e6)):
-        indicator_state, immediate_state = state_dim
         self.max_size = max_size
         self.ptr = 0
-        self.size = 0
-        if type(indicator_state) == int:
-            full_indicator_state = [max_size] + [indicator_state]
-        else:
-            full_indicator_state = [max_size] + [s for s in indicator_state]
-        if type(immediate_state) == int:
-            full_immediate_state = [max_size] + [immediate_state]
-        else:
-            full_immediate_state = [max_size] + [s for s in immediate_state]
-        if type(action_dim) == int:
-            full_action_dim = [max_size] + [action_dim]
-        else:
-            full_action_dim = [max_size] + [a for a in action_dim]
-        self.action = np.zeros(full_action_dim)
-        self.indicator_state = np.zeros(full_indicator_state)
-        self.immediate_state = np.zeros(full_immediate_state)
-        self.next_indicator_state = np.zeros(full_indicator_state)
-        self.next_immediate_state = np.zeros(full_immediate_state)
+        self.size = 0        
+        self.action = np.zeros(action_dim)
+        self.state = np.zeros(state_dim)
+        self.next_state = np.zeros(state_dim)
         self.reward = np.zeros((max_size, 1))
         self.not_done = np.zeros((max_size, 1))
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def add(self, state, action, next_state, reward, done):
-        indicator_state, immediate_state = state
-        next_indicator_state, next_immediate_state = next_state
-        self.immediate_state[self.ptr] = immediate_state
-        self.indicator_state[self.ptr] = indicator_state
+        self.next_state[self.ptr] = next_state
         self.action[self.ptr] = action
-        self.next_immediate_state[self.ptr] = next_immediate_state
-        self.next_indicator_state[self.ptr] = next_indicator_state
+        self.state[self.ptr] = state
         self.reward[self.ptr] = reward
         self.not_done[self.ptr] = 1.0 - done
         self.ptr = (self.ptr + 1) % self.max_size
@@ -361,11 +340,9 @@ class ReplayBuffer(object):
     def sample(self, batch_size):
         ind = np.random.randint(0, self.size, size=batch_size)
         return (
-            torch.FloatTensor(self.indicator_state[ind]).to(self.device),
-            torch.FloatTensor(self.immediate_state[ind]).to(self.device),
+            torch.FloatTensor(self.state[ind]).to(self.device),
             torch.FloatTensor(self.action[ind]).to(self.device),
-            torch.FloatTensor(self.next_indicator_state[ind]).to(self.device),
-            torch.FloatTensor(self.next_immediate_state[ind]).to(self.device),
+            torch.FloatTensor(self.next_state[ind]).to(self.device),
             torch.FloatTensor(self.reward[ind]).to(self.device),
             torch.FloatTensor(self.not_done[ind]).to(self.device),
         )

@@ -9,28 +9,15 @@ import sys
 from torch.utils.tensorboard import SummaryWriter
 
 NUMBER_OF_ITERATIONS = 300000
-MAX_LIMIT = 0.5
+MAX_LIMIT = 200
 START_TIMESTEPS = 5000
-BATCH_SIZE = 32
-STD_GAUSSIAN_EXPLORATION_NOISE = 0.5
-STD_GAUSSIAN_EXPLORATION_NOISE_DECR = 0.0001
-STD_GAUSSIAN_EXPLORATION_LOW = 0.1
-EPSILON = 0.2
-EPSILON_DECR = 0.0002
-EPSILON_LOW = 0.025
-
-
-def is_greedy(t):
-    global EPSILON
-    random_num = random.random()
-    result = random_num > EPSILON
-    EPSILON = max(EPSILON_LOW, EPSILON - EPSILON_DECR)
-    return result
+BATCH_SIZE = 128
+STD_GAUSSIAN_EXPLORATION_NOISE =  0.2
 
 
 def select_action(env, state, policy, t):
     global STD_GAUSSIAN_EXPLORATION_NOISE
-    if t < START_TIMESTEPS :
+    if t < START_TIMESTEPS:
         action = env.action_space.sample()
     else:
         action = (
@@ -41,11 +28,7 @@ def select_action(env, state, policy, t):
                 size=(env.action_space.shape),
             )
         ).clip(-MAX_LIMIT, MAX_LIMIT)
-        STD_GAUSSIAN_EXPLORATION_NOISE = max(STD_GAUSSIAN_EXPLORATION_LOW, 
-                        STD_GAUSSIAN_EXPLORATION_NOISE - STD_GAUSSIAN_EXPLORATION_NOISE_DECR)
-        # if t % 20 == 0:
-        #     utils.log_info("Policy action", action)
-        # action = action.astype(int)
+        action = action.as_type(int)
     return action
 
 

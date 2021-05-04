@@ -40,12 +40,8 @@ class State(object):
         self.essential_state = np.concatenate([
             starting_money, starting_shares, stock_prices
         ])
-        self.past_state = PastState(len(self.essential_state), days_in_state)
-        self.past_state.add(self.essential_state)
-        self.get_indicators()
-        self.indicator_state = self.get_indicator_state(current_date, current_time)
-        state1, state2 = self.get_state()
-        self.shape = (state1.shape, state2.shape)
+        state = self.get_state()
+        self.shape = state.shape
         self.buy_hold_comparison = self.calculate_portfolio_value() / self.number_of_stocks / stock_prices
 
     def get_indicator_state(self, current_date, current_time):
@@ -201,11 +197,7 @@ class State(object):
         """
         Returns: the internal array representing the state
         """
-        num_stocks, length, num_indicators = self.indicator_state.shape
-        reshaped_indicator_state = self.indicator_state.reshape((length, num_stocks * num_indicators))
-        length = len(reshaped_indicator_state)
-        reshaped_indicator_state = reshaped_indicator_state[length - int(0.6 * self.days_in_state):length]
-        return reshaped_indicator_state, self.past_state.data
+        self.essential_state
 
 class PastState(object):
     """

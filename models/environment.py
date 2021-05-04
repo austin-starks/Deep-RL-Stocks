@@ -48,7 +48,7 @@ class StockEnv(gym.Env):
         self.starting_amount = self.starting_amount_upper
         self.reset(init=True)
         self.action_space = spaces.Box(
-            low=-max_limit, high=max_limit, shape=(self.number_of_stocks,), dtype=np.float32
+            low=-max_limit, high=max_limit, shape=(self.number_of_stocks,), dtype=np.int32
         )
         self.invalid_action_penalty = invalid_action_penalty
 
@@ -64,7 +64,7 @@ class StockEnv(gym.Env):
         self.buy_hold_last = buy_hold_comparison
         if action_is_invalid:
             r = r - self.invalid_action_penalty # can penalize invalid actions
-        return r - buy_hold_comparison
+        return r - value_last
 
     def step(self, action):
         """
