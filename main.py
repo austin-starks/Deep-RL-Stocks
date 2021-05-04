@@ -9,7 +9,7 @@ from models.model import DDPG, ReplayBuffer
 import sys
 from torch.utils.tensorboard import SummaryWriter
 
-NUMBER_OF_ITERATIONS = 500000
+NUMBER_OF_ITERATIONS = 0
 MAX_LIMIT = 200
 START_TIMESTEPS = 5000
 BATCH_SIZE = 128
@@ -32,9 +32,7 @@ def select_action(env, state, policy, t):
     global STD_GAUSSIAN_EXPLORATION_NOISE
     if t < START_TIMESTEPS or is_greedy(t):
         action = env.action_space.sample()
-        print(EPSILON)
     else:
-        print('here')
         action = (
             policy.select_action(state.to_numpy())
             + np.random.normal(
@@ -158,7 +156,7 @@ def test(
         start_date=start_date,
         end_date=end_date,
         max_limit=MAX_LIMIT,
-        random_start=False,
+        random_start=False
     )
     utils.log_info("Testing policy")
     state, done = env.reset(), False
@@ -195,7 +193,7 @@ if __name__ == "__main__":
         ["SPY"],
         "01-01-2011",
         "01-01-2015",
-        save_location="results/ddpg_improve",
+        save_location="results/ddpg/ddpg",
         random_start=False,
     )
     test(
@@ -204,6 +202,6 @@ if __name__ == "__main__":
         "09-30-2018",
         policy,
         replay_buffer,
-        save_location=f"results/test_results_ddpg_improve_{NUMBER_OF_ITERATIONS}.csv",
+        save_location=f"results/ddpg/test_results_ddpg_{NUMBER_OF_ITERATIONS}.csv",
     )
 

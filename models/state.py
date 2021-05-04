@@ -88,11 +88,23 @@ class State(object):
 
         new_holdings = []
         for a, holding, price in zip(action, old_holdings, stock_prices):
-            if current_cash - (a * price) >= 0 and holding + a >= 0:
-                new_holdings.append(max(0, holding + a))
-                current_cash -= a * price
+            if a > 0:
+                if current_cash > price:
+                    num_shares = a if price * a < current_cash else current_cash // price
+                    current_cash -= num_shares * price 
+                    new_holding = holding + num_shares
+                else:
+                    invalid_action = True 
+                    new_holding = holding
             else:
-                new_holdings.append(holding)
+                if holding > 0:
+                    num_shares = abs(a) if abs(a) > holding else holding
+                    current_cash += num_shares * price
+                    new_holding = holding - num_shares
+                else:
+                    invalid_action = True
+                    new_holding = holding
+            new_holdings.append(new_holding)
         return np.array(new_holdings), np.array([current_cash.item()]), invalid_action
     
     def get_holdings(self):
@@ -215,7 +227,8 @@ class State(object):
         """
         Returns: the internal array representing the state
         """
-        return np.concatenate((self.essential_state, self.indicator_state.flatten()))
+        return self.essential_state
+        # return np.concatenate((self.essential_state, self.indicator_state.flatten()))
 
 class PastState(object):
     """
