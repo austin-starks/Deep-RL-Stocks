@@ -6,7 +6,6 @@ import logging
 import datetime
 import random
 from models.model import DDPG, ReplayBuffer
-import models.random_process
 import sys
 from torch.utils.tensorboard import SummaryWriter
 
@@ -42,7 +41,8 @@ def select_action(env, state, policy, t):
                 size=(env.action_space.shape),
             )
         ).clip(-MAX_LIMIT, MAX_LIMIT)
-        action = action.as_type(int)
+        action = action.astype(np.int32)
+
     return action
 
 
@@ -70,9 +70,9 @@ def run(
         lr=2e-3,
     )
     # os.path.exists('initial_policy')
-    # if os.path.exists(save_location + "_actor"):
-    #     print("Loaded policy")
-    #     policy.load(save_location)
+    if os.path.exists(save_location + "_actor"):
+        print("Loaded policy")
+        policy.load(save_location)
     replay_buffer = ReplayBuffer(env.state.shape[0], env.action_space.shape[0])
     state, done = env.reset(), False
     episode_reward = 0
@@ -91,8 +91,8 @@ def run(
                 pbar.set_description(
                     f"{env.get_date_and_time()[0]} | R: {reward} | A: {action} | H: {env.get_holdings()}"
                 )
-            # if pbar.n % 200 == 0:
-            #     policy.save(save_location)
+            if pbar.n % 200 == 0:
+                policy.save(save_location)
             done_bool = float(done) if episode_timesteps < env.max_epochs else 0
             # Store data in replay buffer
             replay_buffer.add(
@@ -193,7 +193,7 @@ if __name__ == "__main__":
         ["SPY"],
         "01-01-2011",
         "01-01-2015",
-        save_location="results/experiment7",
+        save_location="results/ddpg",
         random_start=False,
     )
     test(
@@ -202,6 +202,6 @@ if __name__ == "__main__":
         "09-30-2018",
         policy,
         replay_buffer,
-        save_location=f"results/test_results_{NUMBER_OF_ITERATIONS}.csv",
+        save_location=f"results/test_results_ddpg_{NUMBER_OF_ITERATIONS}.csv",
     )
 

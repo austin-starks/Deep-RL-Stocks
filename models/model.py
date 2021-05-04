@@ -160,9 +160,9 @@ class Critic(nn.Module):
 
     def forward(self, state, action):
         sa = torch.cat([state, action], 1)
-        q = self.prelu1(self.l4(sa))
-        q = self.prelu2(self.l5(q))
-        q = self.l6(q)
+        q = self.prelu1(self.l1(sa))
+        q = self.prelu2(self.l2(q))
+        q = self.l3(q)
         return q
 
     def Q1(self, state, action):
@@ -204,6 +204,7 @@ class DDPG(object):
         self.critic_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.critic_optimizer, factor=0.5, patience=20,  verbose=True)
 
     def select_action(self, state):
+        state = torch.FloatTensor(state).to(device)
         action = self.actor(state).cpu().data.numpy()
         return action
 
