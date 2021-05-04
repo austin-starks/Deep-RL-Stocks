@@ -9,7 +9,7 @@ from models.model import DDPG, ReplayBuffer
 import sys
 from torch.utils.tensorboard import SummaryWriter
 
-NUMBER_OF_ITERATIONS = 0
+NUMBER_OF_ITERATIONS = 1000000
 MAX_LIMIT = 200
 START_TIMESTEPS = 5000
 BATCH_SIZE = 128
