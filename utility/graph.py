@@ -66,7 +66,7 @@ def plot(portfolio, filename):
 
 def graph(portfolio_df=None, filename='test_results.png'):
     if portfolio_df is None:
-        portfolio_df = get_data("../results/ddpg_improved/test_results_ddpg_improved_1000000.csv")
+        portfolio_df = get_data("../results/ddpg_improved/test_results_ddpg_improved_2000000.csv")
     try:
         spy = get_data("../data/price_data/SPY.csv")
     except:

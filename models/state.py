@@ -30,11 +30,12 @@ class State(object):
         if type(stock_names) == str:
             stock_names = [stock_names]
         self.stock_names = stock_names
-        for x in ["SPY", "QQQ", "IWM", "IWN", "XLF", 'XLE', "DJI", "BA", 'AAPL', "GOOGL"]:
+        for x in ["SPY", "QQQ", "IWM", "IWN", "XLF", 'XLE', "DJIA", "BA", 'AAPL', "GOOGL", 'AMZN', 'NFLX', "AMD"]:
             if x not in self.stock_names:
                 self.stock_names.append(x) 
         for stock_name in stock_names:
             self.dataframes[stock_name] = self.get_stock_df(stock_name)
+        self.get_indicators()
         stock_prices = self.get_stock_prices(current_date, current_time)
         self.essential_state = np.concatenate([
             starting_money, starting_shares, stock_prices
@@ -66,8 +67,8 @@ class State(object):
         date_obj = datetime.date(date_arr[0], date_arr[1], date_arr[2]) - datetime.timedelta(self.days_in_state)
         past_date = str(date_obj)
         result = []
-        for stock in self.outside_stock_environment_list:
-            data = self.outside_stock_environment_dfs[stock].copy().loc[past_date: current_date]
+        for stock in self.stock_names:
+            data = self.dataframes[stock].copy().loc[past_date: current_date]
             if current_time == 'Open':
                 # We do not know the High, Low, Close, or indicators of the current date at open
                 # We must zero them out so the agent is not looking at the future
@@ -75,11 +76,9 @@ class State(object):
                 yesterday = data.iloc[data.index.get_loc(current_date) - 1]
                 data.loc[current_date] = yesterday
                 data.loc[current_date]['Open'] = open_price
-            print("data", data)
             data_as_numpy = data.to_numpy()
             data_as_numpy = np.pad(data_as_numpy, ((self.days_in_state - len(data_as_numpy), 0), (0,0)), mode='constant')
             result.append(data_as_numpy) 
-            raise NotImplementedError
         return np.array(result)
 
 
@@ -230,11 +229,11 @@ class State(object):
             df['roc 365 monthly'] = df['Close'].pct_change(365)
 
             # get consecuitve green/red days
-            green = df['roc'] > 0
+            green = df['roc today'] > 0
             c_green = green.expanding().apply(lambda r: reduce(lambda x, y: x + 1 if y else x * y, r))
             c_green[green & (green != green.shift(-1))].value_counts()    
             df['consecutive green days'] = c_green   
-            red = df['roc'] < 0
+            red = df['roc today'] < 0
             c_red = red.expanding().apply(lambda r: reduce(lambda x, y: x + 1 if y else x * y, r))
             c_red[red & (red != red.shift(-1))].value_counts()
             df['consecutive red days'] = c_red

@@ -190,7 +190,7 @@ if __name__ == "__main__":
     #     level=logging.INFO,
     #     filemode="w")
     policy, replay_buffer = run(
-        ["SPY"],
+        ["SPY", 'QQQ'],
         "01-01-2011",
         "01-01-2015",
         save_location="results/ddpg",
