@@ -4,6 +4,7 @@ import numpy as np
 import datetime
 import os.path
 from pathlib import Path
+from functools import reduce
 
 class State(object):
     """
@@ -24,27 +25,39 @@ class State(object):
         Precondition: current_time must be a string in this format: HH:MM
         """
         self.dataframes = dict()
-        self.stock_names = stock_names
         self.number_of_stocks = len(stock_names)
         self.days_in_state = days_in_state
         if type(stock_names) == str:
             stock_names = [stock_names]
+        self.stock_names = stock_names
+        for x in ["SPY", "QQQ", "IWM", "IWN", "XLF", 'XLE', "DJI", "BA", 'AAPL', "GOOGL"]:
+            if x not in self.stock_names:
+                self.stock_names.append(x) 
         for stock_name in stock_names:
-            path = os.path.dirname(Path(__file__).absolute())
-            filename = f"{path}/../data/price_data/{stock_name}.csv"
-            try:
-                self.dataframes[stock_name] = pd.read_csv(filename, index_col="Date")
-            except:
-                raise AssertionError(stock_name + " is not a stock or ETF.")
+            self.dataframes[stock_name] = self.get_stock_df(stock_name)
         stock_prices = self.get_stock_prices(current_date, current_time)
         self.essential_state = np.concatenate([
             starting_money, starting_shares, stock_prices
         ])
+        self.buy_hold_comparison = self.calculate_portfolio_value() / self.number_of_stocks / stock_prices
         self.indicator_state = self.get_indicator_state(current_date, current_time)
         state = self.get_state()
         self.shape = state.shape
-        self.buy_hold_comparison = self.calculate_portfolio_value() / self.number_of_stocks / stock_prices
 
+    def get_outside_environment(self, stocks):
+        d = dict()
+        for stock in stocks:
+            d[stock] = self.get_stock_df(stock)  
+        return d
+
+    def get_stock_df(self, stock_name):
+        path = os.path.dirname(Path(__file__).absolute())
+        filename = f"{path}/../data/price_data/{stock_name}.csv"
+        try:
+            return pd.read_csv(filename, index_col="Date")
+        except:
+            raise AssertionError(stock_name + " is not a stock or ETF.")
+        
     def get_indicator_state(self, current_date, current_time):
         """
         Returns: The past 'days' of the indicator state
@@ -53,8 +66,8 @@ class State(object):
         date_obj = datetime.date(date_arr[0], date_arr[1], date_arr[2]) - datetime.timedelta(self.days_in_state)
         past_date = str(date_obj)
         result = []
-        for stock in self.stock_names:
-            data = self.dataframes[stock].copy().loc[past_date: current_date]
+        for stock in self.outside_stock_environment_list:
+            data = self.outside_stock_environment_dfs[stock].copy().loc[past_date: current_date]
             if current_time == 'Open':
                 # We do not know the High, Low, Close, or indicators of the current date at open
                 # We must zero them out so the agent is not looking at the future
@@ -62,11 +75,13 @@ class State(object):
                 yesterday = data.iloc[data.index.get_loc(current_date) - 1]
                 data.loc[current_date] = yesterday
                 data.loc[current_date]['Open'] = open_price
-            # print("data", data)
+            print("data", data)
             data_as_numpy = data.to_numpy()
             data_as_numpy = np.pad(data_as_numpy, ((self.days_in_state - len(data_as_numpy), 0), (0,0)), mode='constant')
             result.append(data_as_numpy) 
+            raise NotImplementedError
         return np.array(result)
+
 
     def get_stock_prices(self, current_date, current_time):
         """
@@ -98,7 +113,7 @@ class State(object):
                     new_holding = holding
             else:
                 if holding > 0:
-                    num_shares = abs(a) if abs(a) > holding else holding
+                    num_shares = abs(a) if abs(a) < holding else holding
                     current_cash += num_shares * price
                     new_holding = holding - num_shares
                 else:
@@ -153,20 +168,23 @@ class State(object):
             df["thirty_day_mean_moving_average"] = df.rolling(window=30).mean()['Close']
             df["ninety_day_mean_moving_average"] = df.rolling(window=90).mean()['Close']
             df["two_hundred_day_mean_moving_average"] = df.rolling(window=200).mean()['Close']
+            df["year_mean_moving_average"] = df.rolling(window=365).mean()['Close']
             df["seven_day_std_moving_average"] = df.rolling(window=7).std()['Close']
             df["thirty_day_std_moving_average"] = df.rolling(window=30).std()['Close']
             df["ninety_day_std_moving_average"] = df.rolling(window=90).std()['Close']
             df["two_hundred_day_std_moving_average"] = df.rolling(window=200).std()['Close']
+            df["year_std_moving_average"] = df.rolling(window=365).std()['Close']
             
             df["seven_day_mean_moving_average_volume"] = df.rolling(window=7).mean()['Volume']
             df["thirty_day_mean_moving_average_volume"] = df.rolling(window=30).mean()['Volume']
             df["ninety_day_mean_moving_average_volume"] = df.rolling(window=90).mean()['Volume']
             df["two_hundred_day_mean_moving_average_volume"] = df.rolling(window=200).mean()['Volume']
+            df["year_mean_moving_average"] = df.rolling(window=365).mean()['Close']            
             df["seven_day_std_moving_average_volume"] = df.rolling(window=7).std()['Volume']
             df["thirty_day_std_moving_average_volume"] = df.rolling(window=30).std()['Volume']
             df["ninety_day_std_moving_average_volume"] = df.rolling(window=90).std()['Volume']
             df["two_hundred_day_std_moving_average_volume"] = df.rolling(window=200).std()['Volume']
-
+            df["year_std_moving_average_volume"] = df.rolling(window=200).std()['Volume']
 
             # get bollander bands
             df["seven_upper_bolliander_band"] = df.rolling(window=7).mean()['Close'] + 2 * df.rolling(window=7).std()['Close']
@@ -177,6 +195,8 @@ class State(object):
             df["ninety_lower_bolliander_band"] = df.rolling(window=90).mean()['Close'] - 2 * df.rolling(window=90).std()['Close']
             df["two_hundred_upper_bolliander_band"] = df.rolling(window=200).mean()['Close'] + 2 * df.rolling(window=200).std()['Close']
             df["two_hundred_lower_bolliander_band"] = df.rolling(window=200).mean()['Close'] - 2 * df.rolling(window=200).std()['Close']
+            df["year_upper_bolliander_band"] = df.rolling(window=365).mean()['Close'] + 2 * df.rolling(window=365).std()['Close']
+            df["year_lower_bolliander_band"] = df.rolling(window=365).mean()['Close'] - 2 * df.rolling(window=365).std()['Close']
             
             df["seven_upper_bolliander_band_volume"] = df.rolling(window=7).mean()['Volume'] + 2 * df.rolling(window=7).std()['Volume']
             df["seven_lower_bolliander_band_volume"] = df.rolling(window=7).mean()['Volume'] - 2 * df.rolling(window=7).std()['Volume']
@@ -186,6 +206,8 @@ class State(object):
             df["ninety_lower_bolliander_band_volume"] = df.rolling(window=90).mean()['Volume'] - 2 * df.rolling(window=90).std()['Volume']
             df["two_hundred_upper_bolliander_band_volume"] = df.rolling(window=200).mean()['Volume'] + 2 * df.rolling(window=200).std()['Volume']
             df["two_hundred_lower_bolliander_band_volume"] = df.rolling(window=200).mean()['Volume'] - 2 * df.rolling(window=200).std()['Volume']
+            df["year_upper_bolliander_band_volume"] = df.rolling(window=365).mean()['Volume'] + 2 * df.rolling(window=365).std()['Volume']
+            df["year_lower_bolliander_band_volume"] = df.rolling(window=365).mean()['Volume'] - 2 * df.rolling(window=365).std()['Volume']
             
             # get rsi
             diff = df['Close'].diff(1).dropna()
@@ -193,16 +215,34 @@ class State(object):
             down_chg = 0 * diff
             up_chg[diff > 0] = diff[ diff>0 ]
             down_chg[diff < 0] = diff[ diff < 0 ]
-            up_chg_avg   = up_chg.ewm(com=13 , min_periods=14).mean()
+            up_chg_avg = up_chg.ewm(com=13 , min_periods=14).mean()
             down_chg_avg = down_chg.ewm(com=13 , min_periods=14).mean()
             rs = abs(up_chg_avg/down_chg_avg)
             rsi = 100 - 100/(1+rs)
             df['rsi'] = rsi
-            df['roc'] = df['Close'].pct_change()
-            df = df.dropna()
 
+            # get rate of change
+            df['roc today'] = df['Close'].pct_change()
+            df['roc week'] = df['Close'].pct_change(7)
+            df['roc monthly'] = df['Close'].pct_change(30)
+            df['roc 90 day'] = df['Close'].pct_change(90)
+            df['roc 200 monthly'] = df['Close'].pct_change(200)
+            df['roc 365 monthly'] = df['Close'].pct_change(365)
+
+            # get consecuitve green/red days
+            green = df['roc'] > 0
+            c_green = green.expanding().apply(lambda r: reduce(lambda x, y: x + 1 if y else x * y, r))
+            c_green[green & (green != green.shift(-1))].value_counts()    
+            df['consecutive green days'] = c_green   
+            red = df['roc'] < 0
+            c_red = red.expanding().apply(lambda r: reduce(lambda x, y: x + 1 if y else x * y, r))
+            c_red[red & (red != red.shift(-1))].value_counts()
+            df['consecutive red days'] = c_red
+
+            df = df.dropna()
             self.dataframes[stock] = df
             self.dataframes[stock]
+       
 
     def reset(self, starting_money, starting_shares, current_date, current_time):
         """
@@ -227,8 +267,8 @@ class State(object):
         """
         Returns: the internal array representing the state
         """
-        return self.essential_state
-        # return np.concatenate((self.essential_state, self.indicator_state.flatten()))
+        # return self.essential_state
+        return np.concatenate((self.essential_state, self.indicator_state.flatten()))
 
 class PastState(object):
     """

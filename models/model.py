@@ -141,7 +141,12 @@ class Actor(nn.Module):
         self.prelu1 = nn.PReLU()
         self.prelu2 = nn.PReLU()
         self.max_action = max_action
-     
+        self.init_weights()
+    
+    def init_weights(self):
+        layers = [self.l1, self.l2, self.l3]
+        for layer in layers:
+            torch.nn.init.kaiming_uniform_(layer.weight)
     def forward(self, state):
         a = self.prelu1(self.l1(state))
         a = self.prelu2(self.l2(a))
@@ -157,6 +162,14 @@ class Critic(nn.Module):
         self.l2 = nn.Linear(400, 300)
         self.prelu2 = nn.PReLU()
         self.l3 = nn.Linear(300, 1)
+        self.init_weights()
+    
+    def init_weights(self):
+        layers = [self.l1, self.l2, self.l3]
+        for layer in layers:
+            torch.nn.init.kaiming_uniform_(layer.weight)
+    
+
 
     def forward(self, state, action):
         sa = torch.cat([state, action], 1)

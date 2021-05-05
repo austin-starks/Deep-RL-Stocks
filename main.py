@@ -17,7 +17,7 @@ STD_GAUSSIAN_EXPLORATION_NOISE =  0.2
 
 EPSILON = 1
 EPSILON_DECR = 0.001
-EPSILON_LOW = 0.05
+EPSILON_LOW = 0.025
 
 
 def is_greedy(t):
@@ -193,7 +193,7 @@ if __name__ == "__main__":
         ["SPY"],
         "01-01-2011",
         "01-01-2015",
-        save_location="results/ddpg/ddpg",
+        save_location="results/ddpg",
         random_start=False,
     )
     test(
@@ -202,6 +202,6 @@ if __name__ == "__main__":
         "09-30-2018",
         policy,
         replay_buffer,
-        save_location=f"results/ddpg/test_results_ddpg_{NUMBER_OF_ITERATIONS}.csv",
+        save_location=f"results/test_results_ddpg_{NUMBER_OF_ITERATIONS}.csv",
     )
 
