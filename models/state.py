@@ -29,6 +29,7 @@ class State(object):
         self.days_in_state = days_in_state
         if type(stock_names) == str:
             stock_names = [stock_names]
+        self.portfolio_stock_names = [x for x in stock_names]
         self.stock_names = stock_names
         for x in ["SPY", "QQQ", "IWM", "IWN", "XLF", 'XLE', "DJIA", "BA", 'AAPL', "GOOGL", 'AMZN', 'NFLX', "AMD"]:
             if x not in self.stock_names:
@@ -87,7 +88,7 @@ class State(object):
         Gets the current stock price at this epoch
         """
         result = []
-        for stock in self.stock_names:
+        for stock in self.portfolio_stock_names:
             price = self.dataframes[stock].loc[current_date][current_time]
             result.append(price)
         return np.array(result)
