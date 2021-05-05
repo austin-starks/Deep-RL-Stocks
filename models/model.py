@@ -12,7 +12,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Paper: https://arxiv.org/abs/1802.09477
 # Original Implementation found on https://github.com/sfujim/TD3/blob/master/TD3.py
 # Regular DDPG: https://github.com/ghliu/pytorch-ddpg
-
 class FirstBlock(nn.Module):
     def __init__(self, in_channel, out_channel):
         super().__init__()
@@ -63,74 +62,47 @@ class InnerBlock(nn.Module):
 class CNN(nn.Module):
     def __init__(
         self,
-        indicator_state_dim,
-        immediate_state_dim,
+        inchannel,
         outchannel,
         activation=nn.PReLU,
     ):
         super(CNN, self).__init__()
         self.layers = nn.Sequential(
-            FirstBlock(1, 32),
+            FirstBlock(inchannel, 32),
 
-            InnerBlock(32, 32), 
-            InnerBlock(32, 32),
+            InnerBlock(32, 64), 
+            InnerBlock(64, 64),
 
-            InnerBlock(32, 32, stride=2), 
-            InnerBlock(32, 32),
+            InnerBlock(64, 128, stride=2), 
+            InnerBlock(128, 128),
             nn.Dropout(0.15),
-            InnerBlock(32, 32),
+            InnerBlock(128, 128),
 
-            InnerBlock(32, 32, stride=2), 
-            InnerBlock(32, 32), 
+            InnerBlock(128, 256, stride=2), 
+            InnerBlock(256, 256), 
             nn.Dropout(0.15),
-            InnerBlock(32, 32), 
-
-            InnerBlock(32, 64, stride=2), 
-            InnerBlock(64, 64), 
+            InnerBlock(256, 256), 
+            
+            InnerBlock(256, 512, stride=2), 
+            InnerBlock(512, 512), 
             nn.Dropout(0.15),
-            InnerBlock(64, 64), 
+            InnerBlock(512, 512), 
             nn.AdaptiveAvgPool2d((1, 1))
         )
        
-        self.layers2 = nn.Sequential(
-            FirstBlock(1, 32),
-
-            InnerBlock(32, 32), 
-            InnerBlock(32, 32),
-
-            InnerBlock(32, 32, stride=2), 
-            InnerBlock(32, 32),
-            nn.Dropout(0.15),
-            InnerBlock(32, 32),
-
-            InnerBlock(32, 32, stride=2), 
-            InnerBlock(32, 32), 
-            nn.Dropout(0.15),
-            InnerBlock(32, 32), 
-
-            InnerBlock(32, 64, stride=2), 
-            InnerBlock(64, 64), 
-            nn.Dropout(0.15),
-            InnerBlock(64, 64), 
-
-            nn.AdaptiveAvgPool2d((1, 1))
-        )       
-
         self.flatten = nn.Flatten()
-        self.output = nn.Linear(64 + 64,  outchannel)
+        self.output = nn.Linear(512,  outchannel)
 
 
-    def forward(self, X, X_immediate):
-        out = self.layers(X.unsqueeze(1))   
+    def forward(self, X, X_immediate=None):
+        out = self.layers(X)   
         out = self.flatten(out)
-
-        out2 = self.layers2(X_immediate.unsqueeze(1))
-        out2 = self.flatten(out2)
-
-        out = self.output(torch.cat((out, out2), -1))
+        if X_immediate != None:
+            out2 = self.layers(X_immediate.unsqueeze(1))
+            out2 = self.flatten(out2)
+            out = self.output(torch.cat((out, out2), -1))
         return out
-
-
+        
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):
         super(Actor, self).__init__()
