@@ -272,8 +272,12 @@ class ReplayBuffer(object):
         self.ptr = 0
         self.size = 0   
         self.action = np.zeros((max_size, action_dim))
-        self.state = np.zeros((max_size, state_dim))
-        self.next_state = np.zeros((max_size, state_dim))
+        if type(state_dim) == tuple or type(state_dim) == list:
+            full_state_dim = [max_size] + [x for x in state_dim]
+        else:
+            full_state_dim = (max_size, state_dim)
+        self.state = np.zeros(full_state_dim)
+        self.next_state = np.zeros(full_state_dim)
         self.reward = np.zeros((max_size, 1))
         self.not_done = np.zeros((max_size, 1))
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

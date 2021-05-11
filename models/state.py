@@ -5,6 +5,7 @@ import datetime
 import os.path
 from pathlib import Path
 from functools import reduce
+from PIL import Image
 
 class State(object):
     """
@@ -36,15 +37,39 @@ class State(object):
                 self.stock_names.append(x) 
         for stock_name in stock_names:
             self.dataframes[stock_name] = self.get_stock_df(stock_name)
-        self.get_indicators()
+        # self.get_indicators()
         stock_prices = self.get_stock_prices(current_date, current_time)
         self.essential_state = np.concatenate([
             starting_money, starting_shares, stock_prices
         ])
         self.buy_hold_comparison = self.calculate_portfolio_value() / self.number_of_stocks / stock_prices
-        self.indicator_state = self.get_indicator_state(current_date, current_time)
+        # self.indicator_state = self.get_indicator_state(current_date, current_time)
+        self.total_graph_state = self.initialize_graph()
+        self.graph_state = self.get_graph_state(current_date, current_time)
         state = self.get_state()
         self.shape = state.shape
+
+    def initialize_graph(self):
+        d = dict()
+        print("Converting images to numpy arrays")
+        path = os.path.dirname(Path(__file__).absolute())
+        filename = f"{path}/../data/graph"
+        for directory in os.listdir(filename):
+            filename = f"{path}/../data/graph/{directory}"
+            image = Image.open(filename)
+            np_img = np.array(image)
+            np_img = np.transpose(np_img, (2,0,1))[0:3]
+            d[directory[0:-4]] = np_img
+        print("Done converting images to np array")
+        return d
+    
+    def get_graph_state(self, current_date, current_time):
+        if current_time == 'Open':
+            index_name = current_date + " 9:30AM"
+        else:
+            index_name = current_date + " 4:00PM"
+        return self.total_graph_state[index_name]
+        
 
     def get_outside_environment(self, stocks):
         d = dict()
@@ -150,7 +175,8 @@ class State(object):
         self.essential_state = np.concatenate([
             remaining_money, holdings.flatten(), stock_prices
         ])
-        self.indicator_state = self.get_indicator_state(current_date, current_time)
+        # self.indicator_state = self.get_indicator_state(current_date, current_time)
+        self.graph_state = self.get_graph_state(current_date, current_time)
 
     def get_indicators(self):
         """
@@ -267,8 +293,7 @@ class State(object):
         """
         Returns: the internal array representing the state
         """
-        # return self.essential_state
-        return np.concatenate((self.essential_state, self.indicator_state.flatten()))
+        return self.graph_state
 
 class PastState(object):
     """

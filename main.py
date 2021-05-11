@@ -62,6 +62,8 @@ def run(
     )
     utils.log_info("Environment Initilized")
     writer = SummaryWriter()
+    print(env.state.shape)
+    raise NotImplementedError
     policy = DDPG(
         env.state.shape[0],
         env.action_space.shape[0],
@@ -73,7 +75,7 @@ def run(
     if os.path.exists(save_location + "_actor"):
         print("Loaded policy")
         policy.load(save_location)
-    replay_buffer = ReplayBuffer(env.state.shape[0], env.action_space.shape[0])
+    replay_buffer = ReplayBuffer(env.state.shape, env.action_space.shape[0])
     state, done = env.reset(), False
     episode_reward = 0
     episode_timesteps = 0
@@ -190,14 +192,14 @@ if __name__ == "__main__":
     #     level=logging.INFO,
     #     filemode="w")
     policy, replay_buffer = run(
-        ["SPY", 'QQQ'],
+        ['NVDA'],
         "01-01-2011",
         "01-01-2015",
         save_location="results/ddpg",
         random_start=False,
     )
     test(
-        ["SPY"],
+        ["NVDA"],
         "01-01-2016",
         "09-30-2018",
         policy,
