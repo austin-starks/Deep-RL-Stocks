@@ -106,7 +106,8 @@ class CNN(nn.Module):
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):
         super(Actor, self).__init__()
-        self.l1 = nn.Linear(state_dim, 400)
+        self.conv = CNN(3, 600)
+        self.l1 = nn.Linear(600, 400)
         self.l2 = nn.Linear(400, 300)
         self.l3 = nn.Linear(300, action_dim)
 
@@ -120,6 +121,7 @@ class Actor(nn.Module):
         for layer in layers:
             torch.nn.init.kaiming_uniform_(layer.weight)
     def forward(self, state):
+        state = self.conv(state)
         a = self.prelu1(self.l1(state))
         a = self.prelu2(self.l2(a))
         a = self.max_action * torch.tanh(self.l3(a))
@@ -157,14 +159,13 @@ class Critic(nn.Module):
         q1 = self.l3(q1)
         return q1
 
-
 class DDPG(object):
     def __init__(
         self,
         state_dim,
         action_dim,
         max_action,
-        discount=0.95,
+        discount=0.99,
         tau=0.005,
         policy_noise=0.2,
         noise_clip=0.5,
@@ -188,9 +189,15 @@ class DDPG(object):
         self.actor_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.actor_optimizer, factor=0.5, patience=20,  verbose=True)
         self.critic_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.critic_optimizer, factor=0.5, patience=20,  verbose=True)
 
-    def select_action(self, state):
-        state = torch.FloatTensor(state).to(device)
-        action = self.actor(state).cpu().data.numpy()
+    def select_action(self, state_tup):
+        ind_state, imm_state = state_tup
+        if len(ind_state.shape) == 2:
+            ind_state = torch.FloatTensor([ind_state]).to(device)
+            imm_state = torch.FloatTensor([imm_state]).to(device)
+        else:
+            ind_state = torch.FloatTensor(ind_state).to(device)
+            imm_state = torch.FloatTensor(imm_state).to(device)
+        action = self.actor(ind_state, imm_state).cpu().data.numpy()
         return action
 
     def train(self, replay_buffer, batch_size=100):
@@ -206,64 +213,54 @@ class DDPG(object):
 
         with torch.no_grad():
             # Select action according to policy
-            next_action = self.actor_target(state) 
-          
-            # Compute the target Q value
-            target_Q  = self.critic_target(
-                next_state, next_action
+            noise = (torch.randn_like(action) * self.policy_noise).clamp(
+                -self.noise_clip, self.noise_clip
             )
+            next_action = (
+                self.actor_target(next_state) + noise
+            ).clamp(-self.max_action, self.max_action)
+            # Compute the target Q value
+            target_Q1, target_Q2 = self.critic_target(next_state, next_action)
+            target_Q = torch.min(target_Q1, target_Q2)
             target_Q = reward + not_done * self.discount * target_Q
         # Get current Q estimates
-        current_Q = self.critic(state, action)
+        current_Q1, current_Q2 = self.critic(state, action)
         # Compute critic loss
-        critic_loss = F.mse_loss(current_Q, target_Q) 
-
+        critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(
+            current_Q2, target_Q
+        )
         # Optimize the critic
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 1) 
         self.critic_optimizer.step()
 
-        # Compute actor losse
-        actor_loss = -self.critic.Q1(
-            state, self.actor(state),
-        ).mean()
-        # Optimize the actor
-        self.actor_optimizer.zero_grad()
+        # Delayed policy updates
+        if self.total_it % self.policy_freq == 0:
+            # Compute actor losse
+            actor_loss = -self.critic.Q1(state, self.actor(state)).mean()
+            # Optimize the actor
+            self.actor_optimizer.zero_grad()
 
-        actor_loss.backward()
+            actor_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 1) 
 
-        self.actor_optimizer.step()
-        # self.actor_scheduler.step(actor_loss)
-        # Update the frozen target models
-        for param, target_param in zip(
-            self.critic.parameters(), self.critic_target.parameters()
-        ):
-            target_param.data.copy_(
-                self.tau * param.data + (1 - self.tau) * target_param.data
-            )
-        for param, target_param in zip(
-            self.actor.parameters(), self.actor_target.parameters()
-        ):
-            target_param.data.copy_(
-                self.tau * param.data + (1 - self.tau) * target_param.data
-            )
+            self.actor_optimizer.step()
+            # self.actor_scheduler.step(actor_loss)
+            # Update the frozen target models
+            for param, target_param in zip(
+                self.critic.parameters(), self.critic_target.parameters()
+            ):
+                target_param.data.copy_(
+                    self.tau * param.data + (1 - self.tau) * target_param.data
+                )
+            for param, target_param in zip(
+                self.actor.parameters(), self.actor_target.parameters()
+            ):
+                target_param.data.copy_(
+                    self.tau * param.data + (1 - self.tau) * target_param.data
+                )
     
-
-    def save(self, filename):
-        torch.save(self.critic.state_dict(), filename + "_critic")
-        torch.save(self.critic_optimizer.state_dict(), filename + "_critic_optimizer")
-        torch.save(self.actor.state_dict(), filename + "_actor")
-        torch.save(self.actor_optimizer.state_dict(), filename + "_actor_optimizer")
-
-    def load(self, filename):
-        self.critic.load_state_dict(torch.load(filename + "_critic", map_location=torch.device('cpu')))
-        self.critic_optimizer.load_state_dict(
-            torch.load(filename + "_critic_optimizer", map_location=torch.device('cpu'))
-        )
-        self.critic_target = copy.deepcopy(self.critic)
-        self.actor.load_state_dict(torch.load(filename + "_actor", map_location=torch.device('cpu')))
-        self.actor_optimizer.load_state_dict(torch.load(filename + "_actor_optimizer", map_location=torch.device('cpu')))
-        self.actor_target = copy.deepcopy(self.actor)
 
 
 class ReplayBuffer(object):
