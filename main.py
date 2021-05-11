@@ -5,7 +5,7 @@ from pathlib import Path
 import logging
 import datetime
 import random
-from models.model import DDPG, ReplayBuffer
+from models.model import TD3, ReplayBuffer
 import sys
 from torch.utils.tensorboard import SummaryWriter
 
@@ -62,9 +62,8 @@ def run(
     )
     utils.log_info("Environment Initilized")
     writer = SummaryWriter()
-    print(env.state.shape)
-    raise NotImplementedError
-    policy = DDPG(
+
+    policy = TD3(
         env.state.shape[0],
         env.action_space.shape[0],
         max_action=MAX_LIMIT,

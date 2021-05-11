@@ -54,11 +54,12 @@ class StockEnv(gym.Env):
     def calculate_reward(self, holdings, remaining_money, stock_prices_new, action_is_invalid=False):
         buy_hold_comparison = (self.state.buy_hold_comparison * stock_prices_new).sum()
         buy_hold_last = self.buy_hold_last
-        value_last = self.value_at_last_timestep
         r = (
             remaining_money
             + np.sum(holdings * (stock_prices_new))
         )
+        value_last = self.value_at_last_timestep if self.value_at_last_timestep != 0 else r
+
         self.value_at_last_timestep = r
         self.buy_hold_last = buy_hold_comparison
         if action_is_invalid:

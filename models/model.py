@@ -106,13 +106,12 @@ class CNN(nn.Module):
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):
         super(Actor, self).__init__()
-        self.conv = CNN(3, 600)
+        self.conv = CNN(state_dim, 600)
         self.l1 = nn.Linear(600, 400)
         self.l2 = nn.Linear(400, 300)
         self.l3 = nn.Linear(300, action_dim)
 
-        self.prelu1 = nn.PReLU()
-        self.prelu2 = nn.PReLU()
+        self.prelu = nn.PReLU()
         self.max_action = max_action
         self.init_weights()
     
@@ -120,46 +119,57 @@ class Actor(nn.Module):
         layers = [self.l1, self.l2, self.l3]
         for layer in layers:
             torch.nn.init.kaiming_uniform_(layer.weight)
+
     def forward(self, state):
         state = self.conv(state)
-        a = self.prelu1(self.l1(state))
-        a = self.prelu2(self.l2(a))
+        a = self.prelu(self.l1(state))
+        a = self.prelu(self.l2(a))
         a = self.max_action * torch.tanh(self.l3(a))
         return a
+
+
+
 
 class Critic(nn.Module):
     def __init__(self, state_dim, action_dim):
         super(Critic, self).__init__()
         # Q1 architecture
-        self.l1 = nn.Linear(state_dim + action_dim, 400)
-        self.prelu1 = nn.PReLU()
-        self.l2 = nn.Linear(400, 300)
-        self.prelu2 = nn.PReLU()
-        self.l3 = nn.Linear(300, 1)
-        self.init_weights()
-    
-    def init_weights(self):
-        layers = [self.l1, self.l2, self.l3]
-        for layer in layers:
-            torch.nn.init.kaiming_uniform_(layer.weight)
-    
+        self.cnn = CNN(state_dim, 600)
+        self.l1 = nn.Linear(600 + action_dim, 400)
+        self.l2 = nn.Linear(400, 200)
+        self.l3 = nn.Linear(200, 1)
+        # Q2 architecture
+        self.cnn2 = CNN(state_dim, 600)
+        self.l4 = nn.Linear(600 + action_dim, 400)
+        self.l5 = nn.Linear(400, 200)
+        self.l6 = nn.Linear(200, 1)
 
+        self.prelu = nn.PReLU()
 
     def forward(self, state, action):
-        sa = torch.cat([state, action], 1)
-        q = self.prelu1(self.l1(sa))
-        q = self.prelu2(self.l2(q))
-        q = self.l3(q)
-        return q
+        sa1 = self.cnn(state)
+        sa1 = torch.cat([sa1, action], 1)
+        q1 = self.prelu(self.l1(sa1))
+        q1 = self.prelu(self.l2(q1))
+        q1 = self.l3(q1)
+        sa2 = self.cnn2(state)
+
+        sa2 = torch.cat([sa2, action], 1)
+        q2 = self.prelu(self.l4(sa2))
+        q2 = self.prelu(self.l5(q2))
+        q2 = self.l6(q2)
+        return q1, q2
 
     def Q1(self, state, action):
-        sa = torch.cat([state, action], 1)
-        q1 = self.prelu1(self.l1(sa))
-        q1 = self.prelu2(self.l2(q1))
+        sa = self.cnn(state)
+        sa = torch.cat([sa, action], 1)
+        q1 = self.prelu(self.l1(sa))
+        q1 = self.prelu(self.l2(q1))
         q1 = self.l3(q1)
         return q1
 
-class DDPG(object):
+
+class TD3(object):
     def __init__(
         self,
         state_dim,
