@@ -4,6 +4,8 @@ Full Paper Here: https://drive.google.com/file/d/1x67IaLpErVw9SwSBjWAdDtNEOcQSgj
 
 This repository intends to leverage the power of Deep Reinforcement Learning for the Stock Market. The algorithm is based on Xiong et al Practical Deep Learning Approach for Stock Trading. However, instead of using the traditional DDPG algorithm, we use Twin-Delayed DDPG. Additionally, we constructed our system to be able to trade multiple stocks at once, instead of the "one stock at a time" approach that they adapted in their paper
 
+[Check out my recent work at NexusTrade.io](https://nexustrade.io/). 
+
 ## Instructions
 
 Simply clone the repository
